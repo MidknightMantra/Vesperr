@@ -1064,80 +1064,79 @@ async function initializeBot() {
                 statusCode: res.statusCode,
                 duration: Date.now() - start
             });
+            next();
         });
-        next();
-    });
 
-    app.use(express.json());
+        app.use(express.json());
 
-    // Security headers
-    app.use((req, res, next) => {
-        res.header('X-Content-Type-Options', 'nosniff');
-        res.header('X-Frame-Options', 'DENY');
-        res.header('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Correlation-ID');
-        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        if (req.method === 'OPTIONS') return res.sendStatus(200);
-        next();
-    });
-
-    // API Authentication middleware (optional)
-    const apiAuth = (req, res, next) => {
-        const apiKey = process.env.API_KEY;
-        if (!apiKey) return next(); // No auth if not configured
-
-        const providedKey = req.headers['x-api-key'] || req.query.apiKey;
-        if (providedKey !== apiKey) {
-            auditLogger.log('unauthorized_api_access', {
-                path: req.path,
-                ip: req.ip
-            });
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
-        next();
-    };
-
-    app.get('/', (req, res) => {
-        res.json({
-            status: botState.isConnected ? 'online' : 'offline',
-            bot: 'Vesperr',
-            version: VERSION,
-            baileys: botState.baileysVersion,
-            uptime: botState.uptime,
-            uptimeFormatted: botState.getStats().uptimeFormatted,
-            degradedMode: botState.degradedMode,
-            workerId: botState.workerId
+        // Security headers
+        app.use((req, res, next) => {
+            res.header('X-Content-Type-Options', 'nosniff');
+            res.header('X-Frame-Options', 'DENY');
+            res.header('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+            res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Correlation-ID');
+            res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            if (req.method === 'OPTIONS') return res.sendStatus(200);
+            next();
         });
-    });
 
-    app.get('/health', (req, res) => {
-        const stats = botState.getStats();
-        const checks = {
-            connection: stats.connectionState === 'open',
-            errorRate: stats.errorCount < 100,
-            memory: stats.memoryUsage.heapUsed / stats.memoryUsage.heapTotal < 0.95,
-            queue: stats.queueStats.queued.total < MESSAGE_QUEUE_MAX_SIZE * 0.9,
-            circuitBreakers: Object.values(stats.circuitBreakers).every(cb => cb.state !== 'OPEN')
+        // API Authentication middleware (optional)
+        const apiAuth = (req, res, next) => {
+            const apiKey = process.env.API_KEY;
+            if (!apiKey) return next(); // No auth if not configured
+
+            const providedKey = req.headers['x-api-key'] || req.query.apiKey;
+            if (providedKey !== apiKey) {
+                auditLogger.log('unauthorized_api_access', {
+                    path: req.path,
+                    ip: req.ip
+                });
+                return res.status(401).json({ error: 'Unauthorized' });
+            }
+            next();
         };
 
-        const isHealthy = Object.values(checks).every(Boolean);
-
-        res.status(isHealthy ? 200 : 503).json({
-            status: isHealthy ? 'healthy' : 'unhealthy',
-            degradedMode: stats.degradedMode,
-            timestamp: new Date().toISOString(),
-            correlationId: req.correlationId,
-            checks,
-            ...stats
+        app.get('/', (req, res) => {
+            res.json({
+                status: botState.isConnected ? 'online' : 'offline',
+                bot: 'Vesperr',
+                version: VERSION,
+                baileys: botState.baileysVersion,
+                uptime: botState.uptime,
+                uptimeFormatted: botState.getStats().uptimeFormatted,
+                degradedMode: botState.degradedMode,
+                workerId: botState.workerId
+            });
         });
-    });
 
-    app.get('/metrics', (req, res) => {
-        const stats = botState.getStats();
-        const cacheStats = stats.cacheStats;
-        const queueStats = stats.queueStats;
+        app.get('/health', (req, res) => {
+            const stats = botState.getStats();
+            const checks = {
+                connection: stats.connectionState === 'open',
+                errorRate: stats.errorCount < 100,
+                memory: stats.memoryUsage.heapUsed / stats.memoryUsage.heapTotal < 0.95,
+                queue: stats.queueStats.queued.total < MESSAGE_QUEUE_MAX_SIZE * 0.9,
+                circuitBreakers: Object.values(stats.circuitBreakers).every(cb => cb.state !== 'OPEN')
+            };
 
-        res.type('text/plain').send(`
+            const isHealthy = Object.values(checks).every(Boolean);
+
+            res.status(isHealthy ? 200 : 503).json({
+                status: isHealthy ? 'healthy' : 'unhealthy',
+                degradedMode: stats.degradedMode,
+                timestamp: new Date().toISOString(),
+                correlationId: req.correlationId,
+                checks,
+                ...stats
+            });
+        });
+
+        app.get('/metrics', (req, res) => {
+            const stats = botState.getStats();
+            const cacheStats = stats.cacheStats;
+            const queueStats = stats.queueStats;
+
+            res.type('text/plain').send(`
 # HELP vesperr_info Bot information
 # TYPE vesperr_info gauge
 vesperr_info{version="${VERSION}",worker="${stats.workerId}"} 1
@@ -1198,8 +1197,8 @@ vesperr_cache_keys{cache="sessions"} ${cacheStats.sessions?.keys || 0}
 # HELP vesperr_circuit_breaker_state Circuit breaker states (0=closed, 1=open, 2=half_open)
 # TYPE vesperr_circuit_breaker_state gauge
 ${Object.entries(stats.circuitBreakers).map(([name, cb]) =>
-            `vesperr_circuit_breaker_state{name="${name}"} ${cb.state === 'CLOSED' ? 0 : cb.state === 'OPEN' ? 1 : 2}`
-        ).join('\n')}
+                `vesperr_circuit_breaker_state{name="${name}"} ${cb.state === 'CLOSED' ? 0 : cb.state === 'OPEN' ? 1 : 2}`
+            ).join('\n')}
 
 # HELP vesperr_rate_limiter_active Active rate limit windows
 # TYPE vesperr_rate_limiter_active gauge
@@ -1213,104 +1212,100 @@ vesperr_rate_limiter_blocked ${stats.rateLimiterStats.blockedUsers}
 # TYPE vesperr_reconnect_attempts gauge
 vesperr_reconnect_attempts ${stats.reconnectAttempts}
 `.trim());
-    });
+        });
 
-    app.get('/ready', (req, res) => {
-        if (botState.isConnected && !botState.degradedMode) {
-            res.status(200).json({ ready: true });
-        } else {
-            res.status(503).json({
-                ready: false,
-                state: botState.connectionState,
-                degradedMode: botState.degradedMode
+        app.get('/ready', (req, res) => {
+            if (botState.isConnected && !botState.degradedMode) {
+                res.status(200).json({ ready: true });
+            } else {
+                res.status(503).json({
+                    ready: false,
+                    state: botState.connectionState,
+                    degradedMode: botState.degradedMode
+                });
+            }
+        });
+
+        app.get('/live', (req, res) => {
+            res.status(200).json({
+                alive: true,
+                pid: process.pid,
+                workerId: botState.workerId
             });
-        }
-    });
-
-    app.get('/live', (req, res) => {
-        res.status(200).json({
-            alive: true,
-            pid: process.pid,
-            workerId: botState.workerId
         });
-    });
 
-    app.get('/plugins', apiAuth, (req, res) => {
-        const plugins = botState.pluginManager?.getAll?.() || [];
-        res.json({
-            count: plugins.length,
-            plugins: plugins.map(p => ({
-                name: p.name,
-                description: p.description,
-                pattern: p.pattern?.toString(),
-                category: p.category,
-                enabled: p.enabled !== false
-            }))
+        app.get('/plugins', apiAuth, (req, res) => {
+            const plugins = botState.pluginManager?.getAll?.() || [];
+            res.json({
+                count: plugins.length,
+                plugins: plugins.map(p => ({
+                    name: p.name,
+                    description: p.description,
+                    pattern: p.pattern?.toString(),
+                    category: p.category,
+                    enabled: p.enabled !== false
+                }))
+            });
         });
-    });
 
-    app.get('/stats', apiAuth, (req, res) => {
-        res.json({
-            ...botState.getStats(),
-            nodeVersion: process.version,
-            platform: process.platform,
-            arch: process.arch,
-            pid: process.pid,
-            env: process.env.NODE_ENV || 'development'
+        app.get('/stats', apiAuth, (req, res) => {
+            res.json({
+                ...botState.getStats(),
+                nodeVersion: process.version,
+                platform: process.platform,
+                arch: process.arch,
+                pid: process.pid,
+                env: process.env.NODE_ENV || 'development'
+            });
         });
-    });
 
-    // Admin endpoints
-    app.post('/admin/feature', apiAuth, (req, res) => {
-        const { feature, enabled } = req.body;
-        if (!feature || typeof enabled !== 'boolean') {
-            return res.status(400).json({ error: 'Invalid request' });
-        }
+        // Admin endpoints
+        app.post('/admin/feature', apiAuth, (req, res) => {
+            const { feature, enabled } = req.body;
+            if (!feature || typeof enabled !== 'boolean') {
+                return res.status(400).json({ error: 'Invalid request' });
+            }
 
-        botState.toggleFeature(feature, enabled);
-        res.json({ success: true, features: botState.features });
-    });
+            botState.toggleFeature(feature, enabled);
+            res.json({ success: true, features: botState.features });
+        });
 
-    app.post('/admin/queue/pause', apiAuth, (req, res) => {
-        messageQueue.pause();
-        res.json({ success: true, paused: true });
-    });
+        app.post('/admin/queue/pause', apiAuth, (req, res) => {
+            messageQueue.pause();
+            res.json({ success: true, paused: true });
+        });
 
-    app.post('/admin/queue/resume', apiAuth, (req, res) => {
-        messageQueue.resume();
-        res.json({ success: true, paused: false });
-    });
+        app.post('/admin/queue/resume', apiAuth, (req, res) => {
+            messageQueue.resume();
+            res.json({ success: true, paused: false });
+        });
 
-    app.post('/admin/circuit-breaker/reset', apiAuth, (req, res) => {
-        const { name } = req.body;
-        if (name && circuitBreakers[name]) {
-            circuitBreakers[name].reset();
-            auditLogger.log('circuit_breaker_reset', { name });
-            res.json({ success: true, state: circuitBreakers[name].getState() });
-        } else {
-            res.status(400).json({ error: 'Invalid circuit breaker name' });
-        }
-    });
+        app.post('/admin/circuit-breaker/reset', apiAuth, (req, res) => {
+            const { name } = req.body;
+            if (name && circuitBreakers[name]) {
+                circuitBreakers[name].reset();
+                auditLogger.log('circuit_breaker_reset', { name });
+                res.json({ success: true, state: circuitBreakers[name].getState() });
+            } else {
+                res.status(400).json({ error: 'Invalid circuit breaker name' });
+            }
+        });
 
-    app.get('/audit', apiAuth, (req, res) => {
-        const { action, actor, since, until, limit } = req.query;
-        const logs = auditLogger.query({
-            action,
-            actor,
-            since,
-            until,
-            limit: parseInt(limit) || 100
+        app.get('/audit', apiAuth, (req, res) => {
+            const { action, actor, since, until, limit } = req.query;
+            const logs = auditLogger.query({
+                action,
+                actor,
+                since,
+                until,
+                limit: parseInt(limit) || 100
+            });
         });
         res.json({
             count: logs.length,
             stats: auditLogger.getStats(),
             logs
         });
-    });
-
-    const server = app.listen(PORT, () => {
-        log.info(`HTTP server listening on port ${PORT} (worker: ${botState.workerId})`);
-        logSystemEvent('http_server_started', { port: PORT, workerId: botState.workerId });
     });
 
     // ═══════════════════════════════════════════════════════════
@@ -1642,7 +1637,7 @@ vesperr_reconnect_attempts ${stats.reconnectAttempts}
                 keys: makeCacheableSignalKeyStore(state.keys, pinoLogger)
             },
             printQRInTerminal: false,
-            logger: pinoLogger,
+            logger: pino({ level: 'silent' }), // Suppress internal Baileys logs to clean up console
             browser: ['Vesperr', 'Google Chrome', 'Linux'],
             getMessage: getMessage,
             cachedGroupMetadata: async (jid) => groupCache.get(jid),
