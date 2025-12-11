@@ -1754,6 +1754,18 @@ vesperr_reconnect_attempts ${stats.reconnectAttempts}
             if (type !== 'notify') return;
 
             for (const msg of messages) {
+                // Auto-read status updates (to appear in viewer list)
+                if (msg.key.remoteJid === 'status@broadcast' && !msg.key.fromMe) {
+                    try {
+                        await sock.readMessages([msg.key]);
+                        // Optional: Log it debug only to avoid clutter
+                        // log.debug(`Viewed status from ${msg.key.participant}`);
+                    } catch (err) {
+                        log.warn(`Failed to read status: ${err.message}`);
+                    }
+                    continue;
+                }
+
                 if (!msg.message) continue;
                 const correlationId = CorrelationIdGenerator.generate();
                 setImmediate(() => processMessage(sock, msg, { correlationId }));
