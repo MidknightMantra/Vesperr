@@ -1,0 +1,203 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# WhatsApp Bot - Docker Compose Configuration
+#
+# Usage:
+#   docker-compose up -d          # Start in background
+#   docker-compose up             # Start with logs
+#   docker-compose down           # Stop and remove containers
+#   docker-compose logs -f        # Follow logs
+#   docker-compose restart        # Restart services
+#   docker-compose pull           # Pull latest images
+#   docker-compose build          # Rebuild images
+# ══════════════════════════════════════════════════════════════════════════════
+
+version: '3.8'
+
+services:
+  # ────────────────────────────────────────────────────────────────────────────
+  # MAIN BOT SERVICE
+  # ────────────────────────────────────────────────────────────────────────────
+  vesperr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: vesperr:latest
+    container_name: vesperr
+    restart: unless-stopped
+
+    # Environment file
+    env_file:
+      - .env
+
+    # Override/add environment variables
+    environment:
+      - NODE_ENV=production
+      - TZ=${TZ:-UTC}
+      - DB_TYPE=${DB_TYPE:-json}
+      - DATABASE_URL=${DATABASE_URL:-}
+
+    # Volume mounts for persistence
+    volumes:
+      # Session data (IMPORTANT: persist across restarts)
+      - ./session:/app/session
+      # Database/data files
+      - ./data:/app/data
+      # Logs
+      - ./logs:/app/logs
+      # Temporary files
+      - ./temp:/app/temp
+      # Plugins (for development/customization)
+      - ./plugins:/app/plugins:ro
+
+    # Health check
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    # Network
+    networks:
+      - bot-network
+
+    # Dependencies (if using external databases)
+    depends_on:
+      mongodb:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # MONGODB (Optional - uncomment if using MongoDB)
+  # ────────────────────────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7
+    container_name: vesperr-mongo
+    restart: unless-stopped
+    profiles:
+      - mongodb
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-password}
+      - MONGO_INITDB_DATABASE=${DB_NAME:-whatsapp_bot}
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot-network
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # REDIS (Optional - for caching/rate limiting)
+  # ────────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: vesperr-redis
+    restart: unless-stopped
+    profiles:
+      - redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password}", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot-network
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # POSTGRESQL (Optional - uncomment if using PostgreSQL)
+  # ────────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: vesperr-postgres
+    restart: unless-stopped
+    profiles:
+      - postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-bot}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${DB_NAME:-whatsapp_bot}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bot}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot-network
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # WATCHTOWER (Optional - auto-update containers)
+  # ────────────────────────────────────────────────────────────────────────────
+  watchtower:
+    image: containrrr/watchtower
+    container_name: vesperr-watchtower
+    restart: unless-stopped
+    profiles:
+      - watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=86400 # Check daily
+      - WATCHTOWER_INCLUDE_STOPPED=false
+      - WATCHTOWER_MONITOR_ONLY=${WATCHTOWER_MONITOR_ONLY:-false}
+      - WATCHTOWER_NOTIFICATIONS=email
+      - WATCHTOWER_NOTIFICATION_EMAIL_FROM=${NOTIFICATION_EMAIL_FROM:-}
+      - WATCHTOWER_NOTIFICATION_EMAIL_TO=${NOTIFICATION_EMAIL_TO:-}
+    command: vesperr
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NETWORKS
+# ══════════════════════════════════════════════════════════════════════════════
+networks:
+  bot-network:
+    driver: bridge
+    name: vesperr-network
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VOLUMES
+# ══════════════════════════════════════════════════════════════════════════════
+volumes:
+  mongodb_data:
+    name: vesperr-mongodb
+  redis_data:
+    name: vesperr-redis
+  postgres_data:
+    name: vesperr-postgres
