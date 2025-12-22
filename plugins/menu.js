@@ -1,4 +1,5 @@
-import { templates, emoji } from '../utils/deluxeUI.js';
+import { templates, emoji, format, levelBar } from '../utils/deluxeUI.js';
+import { getProfile, reputation } from './social.js';
 
 const CONFIG = {
     BOT_NAME: process.env.BOT_NAME || 'Vesperr',
@@ -6,17 +7,20 @@ const CONFIG = {
 };
 
 const CATEGORIES = {
-    ai: { name: 'AI & Chat', emoji: '🧠', order: 1 },
-    download: { name: 'Download', emoji: '📥', order: 2 },
-    media: { name: 'Media', emoji: '🎬', order: 3 },
-    sticker: { name: 'Stickers', emoji: '🎨', order: 4 },
-    utility: { name: 'Utility', emoji: '🔧', order: 5 },
-    search: { name: 'Search', emoji: '🔍', order: 6 },
-    fun: { name: 'Fun', emoji: '🎮', order: 7 },
-    group: { name: 'Group', emoji: '👥', order: 8 },
-    admin: { name: 'Admin', emoji: '👑', order: 9 },
-    owner: { name: 'Owner', emoji: '🛡️', order: 10 },
-    misc: { name: 'Misc', emoji: '📦', order: 99 },
+    ai: { name: 'Neural Networks', emoji: '🔮', order: 1, desc: 'Advanced AI & Chat Models' },
+    download: { name: 'Media Fetcher', emoji: '🛰️', order: 2, desc: 'High-speed Downloaders' },
+    media: { name: 'Studio Suite', emoji: '💿', order: 3, desc: 'Image & Video Manipulation' },
+    sticker: { name: 'Sticker Factory', emoji: '✨', order: 4, desc: 'Creative Sticker Tools' },
+    utility: { name: 'Core Utilities', emoji: '🔌', order: 5, desc: 'Essential System Tools' },
+    search: { name: 'Global Search', emoji: '🔭', order: 6, desc: 'Search Engines & APIs' },
+    fun: { name: 'Entertainment', emoji: '🎲', order: 7, desc: 'Games & Fun Commands' },
+    social: { name: 'Social Hub', emoji: '🪐', order: 8, desc: 'Community & Profiles' },
+    economy: { name: 'Vault System', emoji: '💎', order: 9, desc: 'Earn & Spend Money' },
+    tools: { name: 'Forge Tools', emoji: '⚒️', order: 10, desc: 'Advanced Power Tools' },
+    group: { name: 'Vesperr Command', emoji: '💠', order: 11, desc: 'Group Management' },
+    admin: { name: 'Inner Circle', emoji: '🧿', order: 12, desc: 'Staff Privileges' },
+    owner: { name: 'Core System', emoji: '👑', order: 13, desc: 'Developer Access' },
+    misc: { name: 'Archive', emoji: '📦', order: 99, desc: 'Other Commands' },
 };
 
 function getGreeting() {
@@ -74,9 +78,15 @@ const menuPlugin = {
     usage: '.menu',
     cooldown: 0,
 
-    async execute({ sock, msg, args, prefix, pluginManager, isOwner, isAdmin, pushName }) {
+    async execute({ sock, msg, args, prefix, pluginManager, isOwner, isAdmin, pushName, isPremium }) {
         const chat = msg.key.remoteJid;
+        const sender = msg.key.participant || msg.key.remoteJid;
         const commands = getCommands(pluginManager);
+        const greeting = getGreeting();
+        const date = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+        const prof = getProfile(sender);
+        const rep = reputation.get(sender.split('@')[0]) || 0;
 
         if (args[0] === 'search') {
             const query = args.slice(1).join(' ').toLowerCase();
@@ -88,50 +98,84 @@ const menuPlugin = {
                 }
             }
             if (!matches.length) return sock.sendMessage(chat, { text: templates.notification('Search', `No results for "${query}"`, 'error') }, { quoted: msg });
-            return sock.sendMessage(chat, { text: templates.card(`Search: ${query}`, matches) }, { quoted: msg });
+            return sock.sendMessage(chat, { text: templates.card(`Search Results`, matches) }, { quoted: msg });
         }
 
         const sub = args[0] ? args[0].toLowerCase().replace(prefix, '') : null;
+
+        if (sub && CATEGORIES[sub]) {
+            const options = { isOwner, isAdmin };
+            const categoriesMap = organizeByCategory(commands, options);
+            const cmds = categoriesMap.get(sub) || [];
+            const catInfo = CATEGORIES[sub];
+
+            let catMenu = `╭╾── 『 *${catInfo.name.toUpperCase()}* 』 ──╼╮\n`;
+            catMenu += `│ ${catInfo.emoji} ${catInfo.desc}\n`;
+            catMenu += `┝╾──────────────────╼\n`;
+
+            cmds.forEach((cmd, i) => {
+                catMenu += `│ ${i + 1}. ${prefix}${cmd.name}\n`;
+            });
+
+            catMenu += `╰╾──────────────────╼╯\n`;
+            catMenu += `\n_💡 Tip: Type ${prefix}help <command> for info_`;
+
+            return sock.sendMessage(chat, { text: catMenu }, { quoted: msg });
+        }
+
         if (sub && (commands.has(sub) || [...commands.values()].some(c => c.alias.includes(sub)))) {
             const cmd = commands.get(sub) || [...commands.values()].find(c => c.alias.includes(sub));
             return sock.sendMessage(chat, {
                 text: templates.card(
-                    `Command Help`,
+                    `Command: ${cmd.name.toUpperCase()}`,
                     {
-                        'Name': cmd.name.toUpperCase(),
-                        'Desc': cmd.desc,
+                        'Description': cmd.desc,
                         'Usage': cmd.usage || prefix + cmd.name,
-                        'Aliases': cmd.alias.join(', ') || 'none',
+                        'Alias': cmd.alias.join(', ') || 'none',
                         'Category': cmd.category
                     },
-                    { footer: `Use ${prefix}menu for full list` }
+                    { icon: '💠', footer: `Vesperr System` }
                 )
             }, { quoted: msg });
         }
 
-        const options = { isOwner, isAdmin };
-        const categoriesMap = organizeByCategory(commands, options);
-        const categoriesObj = {};
+        let mainDashboard = `╭╾── 『 *VESPERR COMMAND CENTER* 』 ──╼╮\n`;
+        mainDashboard += `│ ${greeting.emoji} ${greeting.text}, *${pushName}*\n`;
+        mainDashboard += `│ 📅 ${date} | ⏱️ ${new Date().toLocaleTimeString()}\n`;
+        mainDashboard += `┝╾──────── User Status ────────╼\n`;
+        mainDashboard += `│ 💠 *Rank:* ${prof.level >= 50 ? 'Elite' : prof.level >= 20 ? 'Officer' : 'Recruit'}\n`;
+        mainDashboard += `│ 🌟 *Level:* ${prof.level} | *XP:* ${prof.xp}\n`;
+        mainDashboard += `│ 📊 [${levelBar(prof.xp % 100, 100, 10)}]\n`;
+        mainDashboard += `│ 🏆 *Reputation:* ${rep >= 0 ? '+' : ''}${rep}\n`;
+        mainDashboard += `┝╾──────── Bot Information ──────╼\n`;
+        mainDashboard += `│ 🤖 *Build:* v3.0 Stable\n`;
+        mainDashboard += `│ ⚡ *Commands:* ${commands.size} Active\n`;
+        mainDashboard += `│ ⏳ *Uptime:* ${Math.round(process.uptime() / 60)} Minutes\n`;
+        mainDashboard += `│ 👑 *Creator:* MidKnightMantra\n`;
+        mainDashboard += `┝╾──────── Command Categories ──╼\n`;
 
-        for (const [cat, cmds] of categoriesMap) {
-            const catName = CATEGORIES[cat]?.name || cat;
-            categoriesObj[catName] = cmds.map(c => c.name);
-        }
+        const sortedCats = Object.entries(CATEGORIES).sort((a, b) => a[1].order - b[1].order);
+        sortedCats.forEach(([key, val]) => {
+            if (key === 'owner' && !isOwner) return;
+            if (key === 'admin' && !isAdmin && !isOwner) return;
+            mainDashboard += `│ ${val.emoji} *${val.name}* \n│   └ \`${prefix}menu ${key}\`\n`;
+        });
 
-        const date = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-        const greeting = getGreeting();
+        mainDashboard += `╰╾───────────────────╼╯\n`;
+        mainDashboard += `\n_Type ${prefix}menu <category> to see commands_\n_Example: ${prefix}menu ai_`;
 
-        const menuText = templates.menu(
-            'Main Menu',
-            categoriesObj,
-            {
-                subtitle: `${greeting.emoji} ${greeting.text}, *${pushName || 'User'}*\n📅 ${date}\n👑 Owner: ${CONFIG.OWNER_NAME}`,
-                footer: `Powered by ${CONFIG.BOT_NAME} v3.0\nType ${prefix}help <cmd> for details`,
-                prefix
+        await sock.sendMessage(chat, {
+            text: mainDashboard,
+            contextInfo: {
+                externalAdReply: {
+                    title: 'Vesperr Ultimate Dashboard',
+                    body: `User: ${pushName} | Commands: ${commands.size}`,
+                    mediaType: 1,
+                    thumbnailUrl: 'https://files.catbox.moe/o8o8og.jpg',
+                    sourceUrl: 'https://github.com/MidknightMantra/Vesperr'
+                }
             }
-        );
-
-        await sock.sendMessage(chat, { text: menuText }, { quoted: msg });
+        }, { quoted: msg });
     }
 };
 

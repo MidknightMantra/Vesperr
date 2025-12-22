@@ -71,6 +71,7 @@ const groupMetadataCache = new NodeCache({
 const pollVoteStore = new Map();
 
 let sock = null;
+global.autoStatusHandler = null;
 let connectionState = {
     isConnected: false,
     qrDisplayed: false,
@@ -498,7 +499,7 @@ async function connectToWhatsApp() {
 
         if (config.autoReadStatus || config.autoStatusViewer) {
             import('./plugins/autostatus.js').then(module => {
-                autoStatusHandler = module.handleStatusUpdate;
+                global.autoStatusHandler = module.handleStatusUpdate;
                 log.info('Post-Connect: Auto Status system initialized');
             }).catch(() => {
                 log.debug('Auto Status plugin not found in active directory');
@@ -512,9 +513,9 @@ async function connectToWhatsApp() {
             for (const msg of messages) {
                 if (msg.key.remoteJid === 'status@broadcast') {
 
-                    if (autoStatusHandler) {
+                    if (global.autoStatusHandler) {
                         try {
-                            await autoStatusHandler(sock, update);
+                            await global.autoStatusHandler(sock, update);
                         } catch (e) {
                             log.debug('Auto status error:', e.message);
                         }

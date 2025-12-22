@@ -865,11 +865,11 @@ export const templates = {
 
     notification: (title, message, type = 'info') => {
         const icons = {
-            info: '🔹',
-            success: '✅',
-            warning: '⚠️',
-            error: '❌',
-            update: '🔄',
+            info: '💠',
+            success: '❇️',
+            warning: '✴️',
+            error: '🏮',
+            update: '📡',
         };
 
         const icon = icons[type] || '🔔';

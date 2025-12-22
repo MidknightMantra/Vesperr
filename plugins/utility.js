@@ -737,9 +737,199 @@ export const shorten = {
 
         } catch (error) {
             console.error('Shorten error:', error);
-            await sock.sendMessage(chat, { text: '❌ *Failed to shorten URL*', edit: statusMsg.key });
         }
     },
 };
 
-export default [translate, tts, qr, readqr, calc, remind, currency, shorten];
+export const countdown = {
+    name: 'countdown',
+    alias: ['cd', 'timer'],
+    category: 'utility',
+    desc: 'Set a visual countdown timer',
+    usage: '.countdown <seconds>',
+    cooldown: 10000,
+    react: '⏳',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        let seconds = parseInt(args[0]);
+        if (isNaN(seconds) || seconds < 5 || seconds > 60) return sock.sendMessage(chat, { text: '❌ Provide seconds (5-60)!' }, { quoted: msg });
+        const { key } = await sock.sendMessage(chat, { text: `⏳ *Countdown:* ${seconds}s` }, { quoted: msg });
+        const interval = setInterval(async () => {
+            seconds -= 5;
+            if (seconds <= 0) {
+                clearInterval(interval);
+                await sock.sendMessage(chat, { text: '⏰ *Time is up!*', edit: key });
+            } else {
+                await sock.sendMessage(chat, { text: `⏳ *Countdown:* ${seconds}s`, edit: key });
+            }
+        }, 5000);
+    }
+};
+
+const notes = new Map();
+export const mynote = {
+    name: 'note',
+    alias: ['notes', 'savenote'],
+    category: 'utility',
+    desc: 'Save or retrieve small notes',
+    usage: '.note <name> <content> or .note <name>',
+    cooldown: 2000,
+    react: '📝',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        const userId = msg.key.participant || msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ Provide a note name!' }, { quoted: msg });
+        const noteName = args[0].toLowerCase();
+        if (args.length > 1) {
+            const content = args.slice(1).join(' ');
+            if (!notes.has(userId)) notes.set(userId, {});
+            notes.get(userId)[noteName] = content;
+            await sock.sendMessage(chat, { text: `✅ Note *${noteName}* saved!` }, { quoted: msg });
+        } else {
+            const userNotes = notes.get(userId);
+            if (userNotes && userNotes[noteName]) {
+                await sock.sendMessage(chat, { text: `📝 *Note: ${noteName}*\n\n${userNotes[noteName]}` }, { quoted: msg });
+            } else {
+                await sock.sendMessage(chat, { text: '❌ Note not found!' }, { quoted: msg });
+            }
+        }
+    }
+};
+
+export const unitconvert = {
+    name: 'unitconvert',
+    alias: ['uconv', 'units'],
+    category: 'utility',
+    desc: 'Simple unit conversion',
+    usage: '.unitconvert <val> <from> <to>',
+    cooldown: 2000,
+    react: '⚖️',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (args.length < 3) return sock.sendMessage(chat, { text: '❌ Usage: .unitconvert 100 kg lbs' }, { quoted: msg });
+        const val = parseFloat(args[0]);
+        const from = args[1].toLowerCase();
+        const to = args[2].toLowerCase();
+        if (isNaN(val)) return sock.sendMessage(chat, { text: '❌ Invalid value!' }, { quoted: msg });
+
+        let result;
+        if (from === 'kg' && to === 'lbs') result = val * 2.20462;
+        else if (from === 'lbs' && to === 'kg') result = val / 2.20462;
+        else if (from === 'm' && to === 'ft') result = val * 3.28084;
+        else if (from === 'ft' && to === 'm') result = val / 3.28084;
+        else if (from === 'km' && to === 'mi') result = val * 0.621371;
+        else if (from === 'mi' && to === 'km') result = val / 0.621371;
+        else return sock.sendMessage(chat, { text: '❌ Unsupported units! (Try: kg/lbs, m/ft, km/mi)' }, { quoted: msg });
+
+        await sock.sendMessage(chat, { text: `⚖️ *Conversion*\n\n${val} ${from} = *${result.toFixed(2)} ${to}*` }, { quoted: msg });
+    }
+};
+
+export const checksite = {
+    name: 'checksite',
+    alias: ['isup', 'pingweb'],
+    category: 'utility',
+    desc: 'Check if a website is up',
+    usage: '.checksite <url>',
+    cooldown: 5000,
+    react: '🌐',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ Provide a URL!' }, { quoted: msg });
+        let url = args[0];
+        if (!url.startsWith('http')) url = 'https://' + url;
+        const statusMsg = await sock.sendMessage(chat, { text: `🌐 Checking *${url}*...` }, { quoted: msg });
+        try {
+            const start = Date.now();
+            const res = await fetch(url, { timeout: 10000 });
+            const end = Date.now();
+            await sock.sendMessage(chat, {
+                text: `✅ *${url}* is UP!\n⏱️ Response time: ${end - start}ms\n📊 Status: ${res.status} ${res.statusText}`,
+                edit: statusMsg.key
+            });
+        } catch {
+            await sock.sendMessage(chat, { text: `❌ *${url}* appears to be DOWN or unreachable.`, edit: statusMsg.key });
+        }
+    }
+};
+
+export const timezone = {
+    name: 'timezone',
+    alias: ['tz', 'time'],
+    category: 'utility',
+    desc: 'Get current time in a specific timezone',
+    usage: '.timezone <region/city>',
+    cooldown: 5000,
+    react: '⏰',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ Provide a timezone (e.g., Africa/Nairobi, Asia/Tokyo)!' }, { quoted: msg });
+        const tz = args.join('_');
+        try {
+            const time = new Date().toLocaleString('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            const date = new Date().toLocaleString('en-US', { timeZone: tz, dateStyle: 'full' });
+            await sock.sendMessage(chat, { text: `⏰ *Current Time in ${tz}*\n\n🕒 *Time:* ${time}\n📅 *Date:* ${date}` }, { quoted: msg });
+        } catch {
+            await sock.sendMessage(chat, { text: '❌ *Invalid Timezone!*\n\nUse formats like `Europe/London`, `America/New_York`, etc.' }, { quoted: msg });
+        }
+    }
+};
+
+export const whoami = {
+    name: 'whoami',
+    alias: ['me', 'myinfo'],
+    category: 'utility',
+    desc: 'Show your user information',
+    usage: '.whoami',
+    cooldown: 5000,
+    react: '👤',
+    async execute({ sock, msg, pushName }) {
+        const chat = msg.key.remoteJid;
+        const sender = msg.key.participant || msg.key.remoteJid;
+        const number = sender.split('@')[0];
+        const text = `👤 *User Information*\n\n🌟 *Name:* ${pushName || 'User'}\n🔢 *Number:* ${number}\n📍 *JID:* ${sender}\n\n_Vesperr User_`;
+        await sock.sendMessage(chat, { text }, { quoted: msg });
+    }
+};
+
+export const server = {
+    name: 'server',
+    alias: ['host', 'os'],
+    category: 'utility',
+    desc: 'Show bot server information',
+    usage: '.server',
+    cooldown: 5000,
+    react: '🖥️',
+    async execute({ sock, msg }) {
+        const chat = msg.key.remoteJid;
+        const text = `🖥️ *Server Information*\n\n📟 *Platform:* ${process.platform}\n🏛️ *Arch:* ${process.arch}\n🚀 *Node:* ${process.version}\n🔋 *Uptime:* ${Math.round(process.uptime())}s\n\n_Vesperr Engine_`;
+        await sock.sendMessage(chat, { text }, { quoted: msg });
+    }
+};
+
+export const listgroups = {
+    name: 'groups',
+    alias: ['grouplist', 'listgroups'],
+    category: 'utility',
+    desc: 'List all groups the bot is in',
+    usage: '.groups',
+    cooldown: 10000,
+    react: '🏢',
+    async execute({ sock, msg }) {
+        const chat = msg.key.remoteJid;
+        try {
+            const groups = await sock.groupFetchAllParticipating();
+            const list = Object.values(groups);
+            if (list.length === 0) return sock.sendMessage(chat, { text: '❌ No groups found!' }, { quoted: msg });
+            let text = `🏢 *Total Groups: ${list.length}*\n\n`;
+            list.slice(0, 20).forEach((g, i) => {
+                text += `${i + 1}. ${g.subject}\n   🆔 ${g.id}\n\n`;
+            });
+            await sock.sendMessage(chat, { text }, { quoted: msg });
+        } catch {
+            await sock.sendMessage(chat, { text: '❌ Failed to fetch groups' }, { quoted: msg });
+        }
+    }
+};
+
+export default [translate, tts, qr, readqr, calc, remind, currency, shorten, countdown, mynote, unitconvert, checksite, timezone, whoami, server, listgroups];

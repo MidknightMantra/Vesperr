@@ -1,5 +1,6 @@
 import { LRUCache } from 'lru-cache';
 import fetch from 'node-fetch';
+import { levelBar } from '../utils/deluxeUI.js';
 
 const afkUsers = new LRUCache({ max: 10000, ttl: 86400000 * 7 });
 const profiles = new LRUCache({ max: 50000, ttl: 86400000 * 365 });
@@ -184,25 +185,26 @@ export const profile = {
 
         const badges = prof.badges?.length > 0 ? prof.badges.join(' ') : '_None_';
 
-        const text = `─── ☆ *PROFILE* ☆ ───
-
-👤 @${targetJid.split('@')[0]}
-
-★ *Bio:* ${prof.bio || '_Not set_'}
-
-📊 *Stats:*
-├ 🌟 Level: ${prof.level}
-├ ⭐ XP: ${prof.xp.toLocaleString()}
-├ 💬 Messages: ${prof.messages.toLocaleString()}
-└ ❤️ Rep: ${rep >= 0 ? '+' : ''}${rep}
-
-⬆️ *Level ${prof.level + 1}:*
-[ ${progressBar} ] ${progress}%
-
-🏅 *Badges:* ${badges}
-
-───────────────────
-_*Vesperr* ⋆ Social_`;
+        const text = `┌── 『 *USER PROFILE* 』 ──┐
+│
+│ 👤 *User:* @${targetJid.split('@')[0]}
+│ 📝 *Bio:* ${prof.bio || '_Not set_'}
+│
+┝╾─────── Statistics ───────╼
+│ 🌟 *Level:* ${prof.level}
+│ 💬 *Messages:* ${prof.messages.toLocaleString()}
+│ 💠 *Reputation:* ${rep >= 0 ? '+' : ''}${rep}
+│ ⚡ *Current XP:* ${prof.xp.toLocaleString()}
+│
+┝╾─────── Progression ──────╼
+│ 🪐 *Next Level:* ${prof.level + 1}
+│ 📊 [${levelBar(prof.xp % 100, 100, 15)}]
+│
+┝╾──────── Badges ────────╼
+│ 🧿 ${badges}
+│
+└──────────────────────────╼
+_*Vesperr Social Hub*_`;
 
         await sock.sendMessage(chat, { text, mentions: [targetJid] }, { quoted: msg });
     },
@@ -516,6 +518,144 @@ _*Vesperr* ⋆ YouTube_`,
     },
 };
 
+export const ghstalk = {
+    name: 'ghstalk',
+    alias: ['githubstalk', 'ghuser'],
+    category: 'social',
+    desc: 'Get detailed GitHub profile info',
+    usage: '.ghstalk <username>',
+    cooldown: 5000,
+    react: '🐙',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ Usage: `.ghstalk <username>`' }, { quoted: msg });
+        const username = args[0].replace('@', '');
+        const statusMsg = await sock.sendMessage(chat, { text: `🐙 *Fetching GitHub profile...*` }, { quoted: msg });
+        try {
+            const res = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`);
+            const u = await res.json();
+            if (u.login) {
+                await sock.sendMessage(chat, {
+                    text: `🐙 *GitHub Profile*
+ 
+📛 *Name:* ${u.name || u.login}
+👤 *Username:* ${u.login}
+📝 *Bio:* ${u.bio || 'No bio'}
+📍 *Location:* ${u.location || 'Unknown'}
+🔗 *Blog:* ${u.blog || 'None'}
+ 
+📊 *Stats:*
+📁 Public Repos: ${u.public_repos}
+👥 Followers: ${u.followers}
+👤 Following: ${u.following}
+ 
+📅 *Joined:* ${new Date(u.created_at).toLocaleDateString()}
+ 
+───────────────────
+_*Vesperr* ⋆ GitHub_`,
+                    edit: statusMsg.key,
+                });
+            } else {
+                await sock.sendMessage(chat, { text: `❌ *User not found*`, edit: statusMsg.key });
+            }
+        } catch { await sock.sendMessage(chat, { text: '❌ *Failed to fetch GitHub profile*', edit: statusMsg.key }); }
+    },
+};
+
+export const shoutout = {
+    name: 'shoutout',
+    alias: ['so'],
+    category: 'social',
+    desc: 'Give a grand shoutout to someone',
+    usage: '.shoutout @user',
+    cooldown: 5000,
+    react: '📢',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        const mention = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+        if (!mention) return sock.sendMessage(chat, { text: '❌ Mention someone to shoutout!' }, { quoted: msg });
+        const user = mention.split('@')[0];
+        const shouts = [
+            `📢 *ATTENTION EVERYONE!*\n\nLet's give a massive shoutout to @${user}! They are absolutely legendary! 🌟🚀`,
+            `📢 *VIP ALERT!*\n\nBig respect to @${user} for being an absolute unit in this group! 👑💎`,
+            `📢 *SHOUTOUT!*\n\nEveryone, show some love to @${user}! One of the realest ones out here! ❤️🔥`
+        ];
+        const shout = shouts[Math.floor(Math.random() * shouts.length)];
+        await sock.sendMessage(chat, { text: shout, mentions: [mention] }, { quoted: msg });
+    },
+};
+
+export const hug = {
+    name: 'hug',
+    alias: ['sendinghug'],
+    category: 'social',
+    desc: 'Send a virtual hug',
+    usage: '.hug @user',
+    cooldown: 5000,
+    react: '🫂',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        const mention = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+        if (!mention) return sock.sendMessage(chat, { text: '❌ Who do you want to hug?' }, { quoted: msg });
+        const sender = (msg.key.participant || msg.key.remoteJid).split('@')[0];
+        const target = mention.split('@')[0];
+        await sock.sendMessage(chat, {
+            text: `🫂 @${sender} is giving @${target} a big, warm virtual hug! ✨`,
+            mentions: [msg.key.participant || msg.key.remoteJid, mention]
+        }, { quoted: msg });
+    },
+};
+
+export const slap = {
+    name: 'slap',
+    alias: ['smack'],
+    category: 'social',
+    desc: 'Give a virtual slap (funny)',
+    usage: '.slap @user',
+    cooldown: 5000,
+    react: '👋',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        const mention = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+        if (!mention) return sock.sendMessage(chat, { text: '❌ Who needs a slap?' }, { quoted: msg });
+        const sender = (msg.key.participant || msg.key.remoteJid).split('@')[0];
+        const target = mention.split('@')[0];
+        const slaps = [
+            `👋 @${sender} just slapped @${target} with a large trout! 🐟`,
+            `👋 @${sender} gave @${target} a legendary smackdown! 💥`,
+            `👋 @${sender} slapped @${target}. Ouch! That's gotta hurt. 😂`
+        ];
+        const slap = slaps[Math.floor(Math.random() * slaps.length)];
+        await sock.sendMessage(chat, {
+            text: slap,
+            mentions: [msg.key.participant || msg.key.remoteJid, mention]
+        }, { quoted: msg });
+    },
+};
+
+export const xpTracker = {
+    category: 'social',
+    desc: 'Internal XP tracker',
+    enabled: true,
+    hooks: {
+        beforeCommand: async (ctx) => {
+            try {
+                await addMessageXP(ctx.sock, ctx.msg);
+            } catch (e) {
+                console.error('XP Hook Error:', e);
+            }
+        }
+    },
+    onMessage: async (ctx) => {
+        try {
+            await addMessageXP(ctx.sock, ctx.msg);
+        } catch (e) {
+            console.error('XP Message Error:', e);
+        }
+    },
+    priority: 10
+};
+
 export const socialCommands = [
     afk,
     bio,
@@ -527,6 +667,11 @@ export const socialCommands = [
     tiktokstalk,
     igstalk,
     ytstalk,
+    ghstalk,
+    shoutout,
+    hug,
+    slap,
+    xpTracker
 ];
 
 export default socialCommands;
@@ -535,4 +680,5 @@ export {
     getProfile,
     saveProfile,
     afkUsers,
+    reputation,
 };

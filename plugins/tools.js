@@ -464,6 +464,222 @@ export const horoscope = {
     },
 };
 
-export const toolsCommands = [shorturl, screenshot, whois, ip, password, hash, base64, timestamp, tempmail, horoscope];
+export const encode = {
+    name: 'encode',
+    alias: ['enc', 'encrypt'],
+    category: 'tools',
+    desc: 'Encode text (hex, binary, rot13)',
+    usage: '.encode <type> <text>',
+    cooldown: 2000,
+    react: '🔐',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        const types = ['hex', 'binary', 'rot13'];
+        if (!args[0] || !types.includes(args[0].toLowerCase())) {
+            return sock.sendMessage(chat, { text: `❌ Usage: .encode <${types.join('|')}> <text>` }, { quoted: msg });
+        }
+        if (!args[1]) return sock.sendMessage(chat, { text: '❌ Provide text to encode!' }, { quoted: msg });
+        const type = args[0].toLowerCase();
+        const text = args.slice(1).join(' ');
+        let result;
+        switch (type) {
+            case 'hex': result = Buffer.from(text).toString('hex'); break;
+            case 'binary': result = text.split('').map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join(' '); break;
+            case 'rot13': result = text.replace(/[a-z]/gi, c => String.fromCharCode(c.charCodeAt(0) + (c.toLowerCase() < 'n' ? 13 : -13))); break;
+        }
+        await sock.sendMessage(chat, { text: `🔐 *${type.toUpperCase()} Encoded:*\n\n\`\`\`${result}\`\`\`` }, { quoted: msg });
+    },
+};
+
+export const decode = {
+    name: 'decode',
+    alias: ['dec', 'decrypt'],
+    category: 'tools',
+    desc: 'Decode text (hex, binary, rot13)',
+    usage: '.decode <type> <text>',
+    cooldown: 2000,
+    react: '🔓',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        const types = ['hex', 'binary', 'rot13'];
+        if (!args[0] || !types.includes(args[0].toLowerCase())) {
+            return sock.sendMessage(chat, { text: `❌ Usage: .decode <${types.join('|')}> <text>` }, { quoted: msg });
+        }
+        if (!args[1]) return sock.sendMessage(chat, { text: '❌ Provide text to decode!' }, { quoted: msg });
+        const type = args[0].toLowerCase();
+        const text = args.slice(1).join(' ');
+        let result;
+        try {
+            switch (type) {
+                case 'hex': result = Buffer.from(text, 'hex').toString('utf8'); break;
+                case 'binary': result = text.split(' ').map(b => String.fromCharCode(parseInt(b, 2))).join(''); break;
+                case 'rot13': result = text.replace(/[a-z]/gi, c => String.fromCharCode(c.charCodeAt(0) + (c.toLowerCase() < 'n' ? 13 : -13))); break;
+            }
+            await sock.sendMessage(chat, { text: `🔓 *${type.toUpperCase()} Decoded:*\n\n${result}` }, { quoted: msg });
+        } catch { await sock.sendMessage(chat, { text: '❌ Failed to decode. Invalid input!' }, { quoted: msg }); }
+    },
+};
+
+export const color = {
+    name: 'color',
+    alias: ['hex', 'rgb'],
+    category: 'tools',
+    desc: 'Color information',
+    usage: '.color <hex>',
+    cooldown: 2000,
+    react: '🎨',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ Provide a hex color (e.g., #FF5733)' }, { quoted: msg });
+        let hex = args[0].replace('#', '');
+        if (!/^[0-9A-Fa-f]{6}$/.test(hex)) return sock.sendMessage(chat, { text: '❌ Invalid hex color!' }, { quoted: msg });
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        const hsl = rgbToHsl(r, g, b);
+        await sock.sendMessage(chat, {
+            text: `🎨 *Color Info*\n\n*HEX:* #${hex.toUpperCase()}\n*RGB:* rgb(${r}, ${g}, ${b})\n*HSL:* hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)\n\n_Preview: █████████_`
+        }, { quoted: msg });
+    },
+};
+
+function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; }
+    else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+            case g: h = ((b - r) / d + 2) / 6; break;
+            case b: h = ((r - g) / d + 4) / 6; break;
+        }
+    }
+    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
+export const matheval = {
+    name: 'solve',
+    alias: ['calc', 'calculate', 'math'],
+    category: 'tools',
+    desc: 'Calculate math expressions',
+    usage: '.math <expression>',
+    cooldown: 2000,
+    react: '🔢',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ Provide a math expression!' }, { quoted: msg });
+        const expr = args.join(' ').replace(/[^0-9+\-*/.()%^sqrt ]/gi, '');
+        try {
+            const sanitized = expr.replace(/\^/g, '**').replace(/sqrt\(([^)]+)\)/gi, 'Math.sqrt($1)');
+            const result = Function('"use strict"; return (' + sanitized + ')')();
+            if (typeof result !== 'number' || !isFinite(result)) throw new Error('Invalid');
+            await sock.sendMessage(chat, { text: `🔢 *Math Result*\n\n*Expression:* ${expr}\n*Result:* ${result}` }, { quoted: msg });
+        } catch { await sock.sendMessage(chat, { text: '❌ Invalid expression!' }, { quoted: msg }); }
+    },
+};
+
+export const lorem = {
+    name: 'lorem',
+    alias: ['loremipsum', 'placeholder'],
+    category: 'tools',
+    desc: 'Generate lorem ipsum text',
+    usage: '.lorem [words]',
+    cooldown: 2000,
+    react: '📝',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        const words = ['lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing', 'elit', 'sed', 'do', 'eiusmod', 'tempor', 'incididunt', 'ut', 'labore', 'et', 'dolore', 'magna', 'aliqua', 'enim', 'ad', 'minim', 'veniam', 'quis', 'nostrud', 'exercitation', 'ullamco', 'laboris', 'nisi', 'aliquip', 'ex', 'ea', 'commodo', 'consequat', 'duis', 'aute', 'irure', 'in', 'reprehenderit', 'voluptate', 'velit', 'esse', 'cillum', 'fugiat', 'nulla', 'pariatur', 'excepteur', 'sint', 'occaecat', 'cupidatat'];
+        const count = Math.min(parseInt(args[0]) || 50, 200);
+        const text = Array.from({ length: count }, () => words[Math.floor(Math.random() * words.length)]).join(' ');
+        const result = text.charAt(0).toUpperCase() + text.slice(1) + '.';
+        await sock.sendMessage(chat, { text: `📝 *Lorem Ipsum (${count} words)*\n\n${result}` }, { quoted: msg });
+    },
+};
+
+export const uuid = {
+    name: 'uuid',
+    alias: ['guid', 'uniqueid'],
+    category: 'tools',
+    desc: 'Generate UUID',
+    usage: '.uuid [count]',
+    cooldown: 2000,
+    react: '🆔',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        const count = Math.min(parseInt(args[0]) || 1, 5);
+        const uuids = Array.from({ length: count }, () => crypto.randomUUID());
+        await sock.sendMessage(chat, { text: `🆔 *Generated UUID${count > 1 ? 's' : ''}*\n\n${uuids.map(u => '`' + u + '`').join('\n')}` }, { quoted: msg });
+    },
+};
+
+export const getpp = {
+    name: 'getpp',
+    alias: ['pp', 'profilepic', 'getprofilepic'],
+    category: 'tools',
+    desc: 'Download profile picture of a user',
+    usage: '.getpp [@user or number]',
+    cooldown: 5000,
+    react: '👤',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        const mention = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+        let target = mention || msg.key.participant || msg.key.remoteJid;
+
+        if (!mention && args[0]) {
+            let number = args[0].replace(/[^0-9]/g, '');
+            if (number.length >= 10) {
+                target = number + '@s.whatsapp.net';
+            }
+        }
+
+        try {
+            const ppUrl = await sock.profilePictureUrl(target, 'image').catch(() => null);
+            if (!ppUrl) return sock.sendMessage(chat, { text: '❌ No profile picture found for this user!' }, { quoted: msg });
+
+            await sock.sendMessage(chat, {
+                image: { url: ppUrl },
+                caption: `👤 *Profile Picture of @${target.split('@')[0]}*`,
+                mentions: [target]
+            }, { quoted: msg });
+        } catch {
+            await sock.sendMessage(chat, { text: '❌ Failed to fetch profile picture!' }, { quoted: msg });
+        }
+    },
+};
+
+export const fancy = {
+    name: 'fancy',
+    alias: ['font', 'style'],
+    category: 'tools',
+    desc: 'Transform text into fancy fonts',
+    usage: '.fancy <text>',
+    cooldown: 5000,
+    react: '✨',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ provide text to transform!' }, { quoted: msg });
+        const text = args.join(' ');
+
+        const styles = {
+            bold: text.split('').map(c => c.match(/[a-z]/i) ? String.fromCodePoint(c.charCodeAt(0) + (c.match(/[a-z]/) ? 120205 : 120211)) : c).join(''),
+            italic: text.split('').map(c => c.match(/[a-z]/i) ? String.fromCodePoint(c.charCodeAt(0) + (c.match(/[a-z]/) ? 120257 : 120263)) : c).join(''),
+            mono: '```' + text + '```',
+            bubbles: text.split('').map(c => c.match(/[a-z0-9]/i) ? String.fromCodePoint(c.charCodeAt(0) + (c.match(/[a-z]/) ? 9327 : c.match(/[A-Z]/) ? 9333 : 9263)) : c).join('')
+        };
+
+        const response = `✨ *Fancy Text Styles*\n\n` +
+            `*Bold:* ${styles.bold}\n` +
+            `*Italic:* ${styles.italic}\n` +
+            `*Mono:* ${styles.mono}\n` +
+            `*Bubbles:* ${styles.bubbles}`;
+
+        await sock.sendMessage(chat, { text: response }, { quoted: msg });
+    },
+};
+
+export const toolsCommands = [shorturl, screenshot, whois, ip, password, hash, base64, timestamp, tempmail, horoscope, encode, decode, color, matheval, lorem, uuid, getpp, fancy];
 
 export default toolsCommands;

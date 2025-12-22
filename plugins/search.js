@@ -1056,6 +1056,179 @@ export const news = {
     },
 };
 
-export const searchCommands = [google, wiki, lyrics, movie, anime, github, bible, quran, define, urban, imdb, crypto, news, wallpaper, stickersearch];
+export const npm = {
+    name: 'npm',
+    alias: ['npmjs', 'package'],
+    category: 'search',
+    desc: 'Search NPM packages',
+    usage: '.npm <package>',
+    cooldown: 5000,
+    react: '📦',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ Provide a package name!' }, { quoted: msg });
+        const statusMsg = await sock.sendMessage(chat, { text: templates.notification('SEARCHING', `Searching NPM for *${args[0]}*...`, 'info') }, { quoted: msg });
+        try {
+            const res = await fetch(`https://registry.npmjs.org/-/v1/search?text=${encodeURIComponent(args[0])}&size=5`);
+            const data = await res.json();
+            if (data.objects?.length) {
+                const header = templates.header('NPM PACKAGES', args[0].toUpperCase());
+                const packages = data.objects.slice(0, 5).map(p =>
+                    `*${p.package.name}* v${p.package.version}\n_${p.package.description?.substring(0, 80) || 'No description'}_\n📥 \`npm i ${p.package.name}\``
+                );
+                await sock.sendMessage(chat, { text: `${header}\n\n${packages.join('\n\n')}\n\n${templates.footer()}`, edit: statusMsg.key });
+            } else {
+                await sock.sendMessage(chat, { text: templates.error('Not Found', 'No packages found.'), edit: statusMsg.key });
+            }
+        } catch { await sock.sendMessage(chat, { text: templates.error('Error', 'NPM search failed.'), edit: statusMsg.key }); }
+    },
+};
+
+export const stackoverflow = {
+    name: 'stackoverflow',
+    alias: ['so', 'stacko'],
+    category: 'search',
+    desc: 'Search Stack Overflow',
+    usage: '.stackoverflow <query>',
+    cooldown: 5000,
+    react: '📚',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ What do you need help with?' }, { quoted: msg });
+        const query = args.join(' ');
+        const statusMsg = await sock.sendMessage(chat, { text: templates.notification('SEARCHING', `Searching Stack Overflow...`, 'info') }, { quoted: msg });
+        try {
+            const res = await fetch(`https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q=${encodeURIComponent(query)}&site=stackoverflow`);
+            const data = await res.json();
+            if (data.items?.length) {
+                const header = templates.header('STACK OVERFLOW', 'RESULTS');
+                const questions = data.items.slice(0, 5).map(q => {
+                    const answered = q.is_answered ? '✅' : '❓';
+                    return `${answered} *${q.title.replace(/&quot;/g, '"').replace(/&#39;/g, "'")}*\n   👍 ${q.score} | 👁️ ${q.view_count} | [Link](${q.link})`;
+                });
+                await sock.sendMessage(chat, { text: `${header}\n\n${questions.join('\n\n')}\n\n${templates.footer()}`, edit: statusMsg.key });
+            } else {
+                await sock.sendMessage(chat, { text: templates.error('Not Found', 'No questions found.'), edit: statusMsg.key });
+            }
+        } catch { await sock.sendMessage(chat, { text: templates.error('Error', 'Stack Overflow search failed.'), edit: statusMsg.key }); }
+    },
+};
+
+export const reddit = {
+    name: 'reddit',
+    alias: ['subreddit', 'rdt'],
+    category: 'search',
+    desc: 'Search Reddit posts',
+    usage: '.reddit <query>',
+    cooldown: 5000,
+    react: '🤖',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ What do you want to search?' }, { quoted: msg });
+        const query = args.join(' ');
+        const statusMsg = await sock.sendMessage(chat, { text: templates.notification('SEARCHING', `Searching Reddit...`, 'info') }, { quoted: msg });
+        try {
+            const res = await fetch(`https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&limit=5&sort=relevance`);
+            const data = await res.json();
+            if (data.data?.children?.length) {
+                const header = templates.header('REDDIT', 'SEARCH RESULTS');
+                const posts = data.data.children.slice(0, 5).map(p => {
+                    const d = p.data;
+                    return `*${d.title.substring(0, 60)}${d.title.length > 60 ? '...' : ''}*\n   r/${d.subreddit} • ⬆️ ${d.ups} • 💬 ${d.num_comments}`;
+                });
+                await sock.sendMessage(chat, { text: `${header}\n\n${posts.join('\n\n')}\n\n${templates.footer()}`, edit: statusMsg.key });
+            } else {
+                await sock.sendMessage(chat, { text: templates.error('Not Found', 'No posts found.'), edit: statusMsg.key });
+            }
+        } catch { await sock.sendMessage(chat, { text: templates.error('Error', 'Reddit search failed.'), edit: statusMsg.key }); }
+    },
+};
+
+export const book = {
+    name: 'book',
+    alias: ['books', 'openlibrary'],
+    category: 'search',
+    desc: 'Search for books',
+    usage: '.book <title>',
+    cooldown: 5000,
+    react: '📚',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ Provide a book title!' }, { quoted: msg });
+        const query = args.join(' ');
+        const statusMsg = await sock.sendMessage(chat, { text: templates.notification('SEARCHING', `Searching books...`, 'info') }, { quoted: msg });
+        try {
+            const res = await fetch(`https://openlibrary.org/search.json?title=${encodeURIComponent(query)}&limit=5`);
+            const data = await res.json();
+            if (data.docs?.length) {
+                const header = templates.header('BOOKS', query.toUpperCase());
+                const books = data.docs.slice(0, 5).map(b => {
+                    const author = b.author_name?.[0] || 'Unknown';
+                    const year = b.first_publish_year || 'N/A';
+                    return `📖 *${b.title}*\n   ✍️ ${author} • 📅 ${year}`;
+                });
+                await sock.sendMessage(chat, { text: `${header}\n\n${books.join('\n\n')}\n\n${templates.footer()}`, edit: statusMsg.key });
+            } else {
+                await sock.sendMessage(chat, { text: templates.error('Not Found', 'No books found.'), edit: statusMsg.key });
+            }
+        } catch { await sock.sendMessage(chat, { text: templates.error('Error', 'Book search failed.'), edit: statusMsg.key }); }
+    },
+};
+
+export const googleimg = {
+    name: 'googleimg',
+    alias: ['gimg', 'image'],
+    category: 'search',
+    desc: 'Search for images on Google',
+    usage: '.googleimg <query>',
+    cooldown: 5000,
+    react: '🖼️',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ What image are you looking for?' }, { quoted: msg });
+        const query = args.join(' ');
+        await sock.sendMessage(chat, {
+            text: `🖼️ *Google Image Search*\n\n🔍 *Query:* ${query}\n\n_Search Google for images of "${query}"!_\n\n🔗 https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch`
+        }, { quoted: msg });
+    },
+};
+
+export const playstore = {
+    name: 'playstore',
+    alias: ['app', 'ps'],
+    category: 'search',
+    desc: 'Search for apps on Play Store',
+    usage: '.playstore <app name>',
+    cooldown: 5000,
+    react: '📲',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ Provide an app name!' }, { quoted: msg });
+        const query = args.join(' ');
+        await sock.sendMessage(chat, {
+            text: `📲 *Play Store Search*\n\n🔍 *Query:* ${query}\n\n_Find the best apps on Google Play!_\n\n🔗 https://play.google.com/store/search?q=${encodeURIComponent(query)}&c=apps`
+        }, { quoted: msg });
+    },
+};
+
+export const ttsearch = {
+    name: 'ttsearch',
+    alias: ['tiktoksearch'],
+    category: 'search',
+    desc: 'Search for TikTok videos',
+    usage: '.ttsearch <query>',
+    cooldown: 5000,
+    react: '🎵',
+    async execute({ sock, msg, args }) {
+        const chat = msg.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(chat, { text: '❌ What do you want to find on TikTok?' }, { quoted: msg });
+        const query = args.join(' ');
+        await sock.sendMessage(chat, {
+            text: `🎵 *TikTok Search*\n\n🔍 *Query:* ${query}\n\n_Discover the latest trends on TikTok!_\n\n🔗 https://www.tiktok.com/search?q=${encodeURIComponent(query)}`
+        }, { quoted: msg });
+    },
+};
+
+export const searchCommands = [google, wiki, lyrics, movie, anime, github, bible, quran, define, urban, imdb, crypto, news, wallpaper, stickersearch, npm, stackoverflow, reddit, book, googleimg, playstore, ttsearch];
 
 export default searchCommands;

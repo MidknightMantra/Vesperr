@@ -948,12 +948,12 @@ export const cat = {
     }
 };
 
-export const define = {
-    name: 'define',
-    alias: ['dict', 'meaning'],
+export const urbandefine = {
+    name: 'urbandefine',
+    alias: ['urban', 'ud'],
     category: 'fun',
-    desc: 'Define a word',
-    usage: '.define <word>',
+    desc: 'Define a word (simple)',
+    usage: '.urbandefine <word>',
     cooldown: 5000,
     react: '📖',
     async execute({ sock, msg, args }) {
@@ -969,6 +969,212 @@ export const define = {
         } catch {
             await sock.sendMessage(msg.key.remoteJid, { text: '❌ Word not found!' }, { quoted: msg });
         }
+    }
+};
+
+const FORTUNES = [
+    '🥠 A beautiful relationship is about to blossom.',
+    '🥠 Success is in your future, keep pushing!',
+    '🥠 An exciting opportunity awaits you.',
+    '🥠 Your creativity will lead to great things.',
+    '🥠 Good news is on its way to you.',
+    '🥠 Trust your instincts, they will guide you.',
+    '🥠 A surprise is waiting around the corner.',
+    '🥠 Your hard work will pay off soon.',
+    '🥠 Someone special is thinking of you.',
+    '🥠 Adventure awaits, embrace the unknown.',
+    '🥠 Today is the day to start something new.',
+    '🥠 Patience will bring you great rewards.',
+    '🥠 A new friend will enter your life soon.',
+    '🥠 Your next challenge will become your greatest victory.',
+    '🥠 The stars align in your favor today.',
+];
+
+const ROASTS = [
+    "You're not stupid; you just have bad luck thinking.",
+    "I'd agree with you, but then we'd both be wrong.",
+    "You're like a cloud. When you disappear, it's a beautiful day.",
+    "I'm not insulting you, I'm describing you.",
+    "You're proof that evolution can go in reverse.",
+    "If brains were dynamite, you wouldn't have enough to blow your nose.",
+    "You're not the dumbest person on the planet, but you better hope they don't die.",
+    "I'd explain it to you, but I left my crayons at home.",
+    "You're like a software update. Whenever I see you, I think 'not now'.",
+    "You're the reason the gene pool needs a lifeguard.",
+    "If you were any less intelligent, we'd have to water you twice a week.",
+    "I've seen salads more intimidating than you.",
+    "You bring everyone so much joy... when you leave.",
+    "Your secrets are safe with me. I wasn't listening anyway.",
+    "You're like a Monday, nobody likes you.",
+];
+
+const FACTS = [
+    "Honey never spoils. Archaeologists have found edible honey in ancient Egyptian tombs.",
+    "A day on Venus is longer than a year on Venus.",
+    "Bananas are berries, but strawberries aren't.",
+    "Octopuses have three hearts and blue blood.",
+    "The shortest war in history lasted only 38 minutes.",
+    "A group of flamingos is called a 'flamboyance'.",
+    "There are more trees on Earth than stars in the Milky Way.",
+    "Wombat poop is cube-shaped.",
+    "Sloths can hold their breath longer than dolphins can.",
+    "The Eiffel Tower can be 15 cm taller during the summer.",
+    "Humans share 50% of their DNA with bananas.",
+    "The heart of a shrimp is located in its head.",
+    "A snail can sleep for three years.",
+    "Koalas have fingerprints almost identical to humans.",
+    "An ostrich's eye is bigger than its brain.",
+];
+
+export const fortune = {
+    name: 'fortune',
+    alias: ['cookie', 'fortunecookie'],
+    category: 'fun',
+    desc: 'Get a fortune cookie message',
+    usage: '.fortune',
+    cooldown: 5000,
+    react: '🥠',
+    async execute({ sock, msg }) {
+        const fortune = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+        await sock.sendMessage(msg.key.remoteJid, { text: fortune }, { quoted: msg });
+    }
+};
+
+export const roast = {
+    name: 'roast',
+    alias: ['burn', 'insultme'],
+    category: 'fun',
+    desc: 'Get a funny roast',
+    usage: '.roast [@user]',
+    cooldown: 5000,
+    react: '🔥',
+    async execute({ sock, msg, args }) {
+        const mention = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+        const target = mention ? `@${mention.split('@')[0]}` : 'you';
+        const roast = ROASTS[Math.floor(Math.random() * ROASTS.length)];
+        await sock.sendMessage(msg.key.remoteJid, {
+            text: `🔥 *Roast for ${target}:*\n\n${roast}`,
+            mentions: mention ? [mention] : []
+        }, { quoted: msg });
+    }
+};
+
+export const fact = {
+    name: 'fact',
+    alias: ['funfact', 'randomfact'],
+    category: 'fun',
+    desc: 'Get a random interesting fact',
+    usage: '.fact',
+    cooldown: 5000,
+    react: '💡',
+    async execute({ sock, msg }) {
+        const fact = FACTS[Math.floor(Math.random() * FACTS.length)];
+        await sock.sendMessage(msg.key.remoteJid, { text: `💡 *Did you know?*\n\n${fact}` }, { quoted: msg });
+    }
+};
+
+export const ascii = {
+    name: 'ascii',
+    alias: ['asciiart', 'textart'],
+    category: 'fun',
+    desc: 'Convert text to ASCII art',
+    usage: '.ascii <text>',
+    cooldown: 5000,
+    react: '🔤',
+    async execute({ sock, msg, args }) {
+        if (!args[0]) return sock.sendMessage(msg.key.remoteJid, { text: '❌ Provide text!' }, { quoted: msg });
+        const text = args.join(' ').substring(0, 10);
+        try {
+            const res = await fetch(`https://artii.herokuapp.com/make?text=${encodeURIComponent(text)}`);
+            if (!res.ok) throw new Error('API failed');
+            const art = await res.text();
+            await sock.sendMessage(msg.key.remoteJid, { text: '```' + art + '```' }, { quoted: msg });
+        } catch {
+            const simple = text.split('').map(c => c.toUpperCase()).join(' ');
+            await sock.sendMessage(msg.key.remoteJid, { text: '```\n' + simple + '\n```' }, { quoted: msg });
+        }
+    }
+};
+
+export const cowsay = {
+    name: 'cowsay',
+    alias: ['cow', 'moo'],
+    category: 'fun',
+    desc: 'Make a cow say something',
+    usage: '.cowsay <text>',
+    cooldown: 5000,
+    react: '🐄',
+    async execute({ sock, msg, args }) {
+        if (!args[0]) return sock.sendMessage(msg.key.remoteJid, { text: '❌ What should the cow say?' }, { quoted: msg });
+        const text = args.join(' ').substring(0, 40);
+        const border = '_'.repeat(text.length + 2);
+        const cow = `
+ ${border}
+< ${text} >
+ ${'-'.repeat(text.length + 2)}
+        \\   ^__^
+         \\  (oo)\\_______
+            (__)\\       )\\/\\
+                ||----w |
+                ||     ||`;
+        await sock.sendMessage(msg.key.remoteJid, { text: '```' + cow + '```' }, { quoted: msg });
+    }
+};
+
+export const reverse = {
+    name: 'reverse',
+    alias: ['rev', 'backwards'],
+    category: 'fun',
+    desc: 'Reverse text',
+    usage: '.reverse <text>',
+    cooldown: 3000,
+    react: '🔄',
+    async execute({ sock, msg, args }) {
+        if (!args[0]) return sock.sendMessage(msg.key.remoteJid, { text: '❌ Provide text to reverse!' }, { quoted: msg });
+        const reversed = args.join(' ').split('').reverse().join('');
+        await sock.sendMessage(msg.key.remoteJid, { text: `🔄 *Reversed:*\n${reversed}` }, { quoted: msg });
+    }
+};
+
+export const mock = {
+    name: 'mock',
+    alias: ['spongebob', 'mocking'],
+    category: 'fun',
+    desc: 'MoCkInG sPoNgEbOb TeXt',
+    usage: '.mock <text>',
+    cooldown: 3000,
+    react: '🧽',
+    async execute({ sock, msg, args }) {
+        if (!args[0]) return sock.sendMessage(msg.key.remoteJid, { text: '❌ Provide text to mock!' }, { quoted: msg });
+        const mocked = args.join(' ').split('').map((c, i) =>
+            i % 2 === 0 ? c.toLowerCase() : c.toUpperCase()
+        ).join('');
+        await sock.sendMessage(msg.key.remoteJid, { text: `🧽 ${mocked}` }, { quoted: msg });
+    }
+};
+
+export const uwu = {
+    name: 'uwu',
+    alias: ['owo', 'uwuify'],
+    category: 'fun',
+    desc: 'UwU-ify your text',
+    usage: '.uwu <text>',
+    cooldown: 3000,
+    react: '✨',
+    async execute({ sock, msg, args }) {
+        if (!args[0]) return sock.sendMessage(msg.key.remoteJid, { text: '❌ Pwovide some text uwu!' }, { quoted: msg });
+        const uwuified = args.join(' ')
+            .replace(/[rl]/g, 'w')
+            .replace(/[RL]/g, 'W')
+            .replace(/n([aeiou])/g, 'ny$1')
+            .replace(/N([aeiou])/g, 'Ny$1')
+            .replace(/N([AEIOU])/g, 'NY$1')
+            .replace(/ove/g, 'uv')
+            .replace(/\!/g, '! >w< ')
+            .replace(/\?/g, '? owo ');
+        const faces = ['(◕ᴗ◕✿)', 'ʕ•ᴥ•ʔ', '(◠‿◠)', 'UwU', 'OwO', '(✧ω✧)', '(◕‿◕)'];
+        const face = faces[Math.floor(Math.random() * faces.length)];
+        await sock.sendMessage(msg.key.remoteJid, { text: `${uwuified} ${face}` }, { quoted: msg });
     }
 };
 
@@ -995,7 +1201,15 @@ export const funCommands = [
     advice,
     dog,
     cat,
-    define
+    urbandefine,
+    fortune,
+    roast,
+    fact,
+    ascii,
+    cowsay,
+    reverse,
+    mock,
+    uwu
 ];
 
 export default funCommands;

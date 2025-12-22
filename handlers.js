@@ -673,6 +673,7 @@ export async function handleMessage(sock, msg, extra = {}) {
                 isOwner: ctx.isOwner,
                 isAdmin: ctx.isAdmin,
                 isPremium: ctx.isPremium,
+                pushName: ctx.pushName,
                 groupMetadata: ctx.groupMetadata
             });
 
@@ -812,7 +813,12 @@ async function handleInteractiveResponse(ctx) {
 }
 
 export async function handleGroupUpdate(sock, update) {
-    const { id: jid, participants, action } = update;
+    let { id: jid, participants, action } = update;
+
+    if (!jid || typeof jid !== 'string') {
+        log.debug('Skipping group update: Invalid JID');
+        return;
+    }
 
     const author = typeof update.author === 'string'
         ? update.author

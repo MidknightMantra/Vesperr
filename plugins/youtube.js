@@ -1,6 +1,55 @@
 import fetch from 'node-fetch';
 import ytdl from 'ytdl-core';
 import ytSearch from 'yt-search';
+import { templates } from '../utils/deluxeUI.js';
+
+async function getAudioFromAPIs(videoId, query = null) {
+    const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    // Ordered by reliability/speed
+    const sources = [
+        // Source 1: Izumi (User choice - query based if available)
+        async () => {
+            if (!query) return null;
+            const res = await fetch(`https://izumiiiiiiii.dpdns.org/downloader/youtube-play?query=${encodeURIComponent(query)}`, { timeout: 15000 });
+            const data = await res.json();
+            return data.result?.download || data.result?.url || null;
+        },
+        // Source 2: Okatsu (User choice)
+        async () => {
+            const res = await fetch(`https://okatsu-rolezapiiz.vercel.app/downloader/ytmp3?url=${encodeURIComponent(ytUrl)}`, { timeout: 15000 });
+            const data = await res.json();
+            return data.dl || data.result?.download || null;
+        },
+        // Source 3: Cobalt (Reliable backup)
+        async () => {
+            const res = await fetch('https://api.cobalt.tools/api/json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ url: ytUrl, aFormat: 'mp3', isAudioOnly: true }),
+                timeout: 15000
+            });
+            const data = await res.json();
+            return data.url || null;
+        },
+        // Source 4: Gifted (Reliable backup)
+        async () => {
+            const res = await fetch(`https://api.giftedtech.co.ke/api/download/ytmp3?url=${encodeURIComponent(ytUrl)}&apikey=gifted`, { timeout: 15000 });
+            const data = await res.json();
+            return data.result?.download_url || data.result?.url || null;
+        }
+    ];
+
+    for (const source of sources) {
+        try {
+            const url = await source();
+            if (url) return url;
+        } catch (e) {
+            continue;
+        }
+    }
+    return null;
+}
 
 const CONFIG = {
     MAX_VIDEO_SIZE: 100 * 1024 * 1024,
@@ -194,22 +243,11 @@ const youtubePlugin = {
 
         if (args.length === 0) {
             return sock.sendMessage(chat, {
-                text: `─── ✧ *YOUTUBE* ✧ ───
-
-*Download Video:*
-⊹ \`.yt <url>\`
-⊹ \`.yt <search query>\`
-
-*Download Audio:*
-⊹ \`.ytmp3 <url>\`
-⊹ \`.play <song name>\`
-
-*Examples:*
-\`.yt never gonna give you up\`
-\`.yt https://youtu.be/dQw4w9WgXcQ\`
-
-───────────────────
-_*Vesperr* ⋆ YouTube_`,
+                text: templates.card('Vesperr Media', {
+                    'Fetch & Download': `${prefix}yt <url>`,
+                    'Search & Fetch': `${prefix}yt <query>`,
+                    'Note': 'Supports Shorts and Videos'
+                }, { icon: '🎬', footer: 'Vesperr Media Engine' })
             }, { quoted: msg });
         }
 
@@ -217,7 +255,7 @@ _*Vesperr* ⋆ YouTube_`,
         let videoId = extractVideoId(query);
 
         const statusMsg = await sock.sendMessage(chat, {
-            text: videoId ? '⏳ *Fetching video...*' : '🔍 *Searching...*',
+            text: templates.notification('Status', videoId ? 'Fetching video...' : 'Searching...', 'info'),
         }, { quoted: msg });
 
         try {
@@ -227,7 +265,7 @@ _*Vesperr* ⋆ YouTube_`,
 
                 if (results.length === 0) {
                     return sock.sendMessage(chat, {
-                        text: '❌ *No results found!*',
+                        text: templates.notification('Vesperr Search', 'No results found!', 'error'),
                         edit: statusMsg.key,
                     });
                 }
@@ -239,20 +277,20 @@ _*Vesperr* ⋆ YouTube_`,
 
             if (!info) {
                 return sock.sendMessage(chat, {
-                    text: '❌ *Failed to get video info*',
+                    text: templates.notification('Vesperr Error', 'Failed to get video info', 'error'),
                     edit: statusMsg.key,
                 });
             }
 
             if (info.duration > CONFIG.MAX_DURATION) {
                 return sock.sendMessage(chat, {
-                    text: `❌ *Video too long!*\n\nMax duration: ${CONFIG.MAX_DURATION / 60} minutes\nVideo duration: ${formatDuration(info.duration)}`,
+                    text: templates.notification('Vesperr Restriction', `Video too long! Max: ${CONFIG.MAX_DURATION / 60}m`, 'warning'),
                     edit: statusMsg.key,
                 });
             }
 
             await sock.sendMessage(chat, {
-                text: `📺 *Downloading...*\n\n*${info.title}*\n⏱️ ${formatDuration(info.duration)} | 👁️ ${formatViews(info.views)}`,
+                text: templates.notification('Status', `Downloading: ${info.title.slice(0, 30)}...`, 'update'),
                 edit: statusMsg.key,
             });
 
@@ -280,7 +318,12 @@ _*Vesperr* ⋆ YouTube_`,
             await sock.sendMessage(chat, {
                 video: videoBuffer,
                 mimetype: 'video/mp4',
-                caption: `🎬 *${info.title}*\n\n👤 ${info.author}\n⏱️ ${formatDuration(info.duration)}\n👁️ ${formatViews(info.views)} views\n\n_*Vesperr* ⋆ YouTube_`,
+                caption: templates.card('DOWNLOAD COMPLETE', {
+                    'Title': info.title,
+                    'Author': info.author,
+                    'Duration': formatDuration(info.duration),
+                    'Views': formatViews(info.views)
+                }, { icon: '🎬', footer: 'Vesperr Media Engine' }),
             }, { quoted: msg });
 
             await sock.sendMessage(chat, { delete: statusMsg.key });
@@ -288,7 +331,7 @@ _*Vesperr* ⋆ YouTube_`,
         } catch (error) {
             console.error('YouTube error:', error);
             await sock.sendMessage(chat, {
-                text: '❌ *Failed to download*\n\nTry a different video or check the URL.',
+                text: templates.notification('Vesperr Error', 'Download failed', 'error'),
                 edit: statusMsg.key,
             });
         }
@@ -304,103 +347,92 @@ export const ytmp3 = {
     cooldown: 10000,
     react: '🎵',
 
-    async execute({ sock, msg, args }) {
+    async execute({ sock, msg, args, prefix }) {
         const chat = msg.key.remoteJid;
 
         if (args.length === 0) {
             return sock.sendMessage(chat, {
-                text: `─── ✧ *YOUTUBE MP3* ✧ ───
-
-*Usage:*
-⊹ \`.ytmp3 <url>\`
-⊹ \`.play <song name>\`
-
-*Examples:*
-\`.play shape of you\`
-\`.ytmp3 https://youtu.be/...\`
-
-───────────────────
-_*Vesperr* ⋆ YouTube_`,
+                text: templates.card('Vesperr Music', {
+                    'Search & Download': `${prefix}play <song>`,
+                    'Fetch & Download': `${prefix}song <url>`,
+                    'Pro Tip': 'Artist name improves results'
+                }, { icon: '🎵', footer: 'Vesperr Power Engine' }),
             }, { quoted: msg });
         }
 
-        const query = args.join(' ');
-        let videoId = extractVideoId(query);
+        const query = args.join(' ').trim();
+        const isUrl = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)/.test(query);
 
         const statusMsg = await sock.sendMessage(chat, {
-            text: videoId ? '⏳ *Fetching audio...*' : '🔍 *Searching...*',
+            text: templates.notification('Status', 'Searching for matching song...', 'info'),
         }, { quoted: msg });
 
         try {
-            if (!videoId) {
-                const results = await searchYouTube(query, 1);
-
-                if (results.length === 0) {
+            let video;
+            if (isUrl) {
+                await sock.sendMessage(chat, {
+                    text: templates.notification('Status', 'Extracting link data...', 'update'),
+                    edit: statusMsg.key
+                });
+                video = { url: query, title: 'YouTube Audio' };
+            } else {
+                const search = await ytSearch(query);
+                if (!search || !search.videos.length) {
                     return sock.sendMessage(chat, {
-                        text: '❌ *No results found!*',
-                        edit: statusMsg.key,
+                        text: templates.notification('Search', 'No results found!', 'error'),
+                        edit: statusMsg.key
                     });
                 }
-
-                videoId = results[0].id;
-            }
-
-            const info = await getVideoInfo(videoId);
-
-            if (!info) {
-                return sock.sendMessage(chat, {
-                    text: '❌ *Failed to get video info*',
-                    edit: statusMsg.key,
-                });
-            }
-
-            if (info.duration > CONFIG.MAX_DURATION) {
-                return sock.sendMessage(chat, {
-                    text: `❌ *Audio too long!*\n\nMax: ${CONFIG.MAX_DURATION / 60} min`,
-                    edit: statusMsg.key,
-                });
+                video = search.videos[0];
             }
 
             await sock.sendMessage(chat, {
-                text: `🎵 *Downloading...*\n\n*${info.title}*`,
-                edit: statusMsg.key,
+                text: templates.notification('Status', `Found: ${video.title.slice(0, 30)}...`, 'success'),
+                edit: statusMsg.key
             });
 
-            let audioBuffer;
+            await sock.sendMessage(chat, {
+                text: templates.notification('Status', 'Downloading audio data...', 'update'),
+                edit: statusMsg.key
+            });
 
-            try {
+            const downloadUrl = await getAudioFromAPIs(video.videoId || video.id, video.title);
 
-                const downloadUrl = await downloadFromAPI(videoId, 'audio');
-
-                if (downloadUrl) {
-                    const response = await fetch(downloadUrl, { timeout: CONFIG.TIMEOUT });
-                    audioBuffer = Buffer.from(await response.arrayBuffer());
-                }
-            } catch (e) {
-                console.error('Audio download error:', e);
-            }
-
-            if (!audioBuffer || audioBuffer.length < 1000) {
-                return sock.sendMessage(chat, {
-                    text: '❌ *Download failed*',
-                    edit: statusMsg.key,
-                });
+            if (!downloadUrl) {
+                throw new Error('All download sources failed. Try again with a different song name.');
             }
 
             await sock.sendMessage(chat, {
-                audio: audioBuffer,
+                text: templates.notification('Status', 'Finalizing MP3 encoding...', 'update'),
+                edit: statusMsg.key
+            });
+
+            const finalTitle = video.title || 'Vesperr Audio';
+            const caption = templates.card('Vesperr Music', {
+                'Title': finalTitle.slice(0, 40),
+                'Artist': video.author?.name || 'YouTube',
+                'Format': 'MP3 High Quality',
+                'Status': 'Success'
+            }, { icon: '🎶', footer: 'Vesperr Power Engine' });
+
+            await sock.sendMessage(chat, {
+                audio: { url: downloadUrl },
                 mimetype: 'audio/mpeg',
-                fileName: `${info.title}.mp3`,
+                fileName: `${finalTitle}.mp3`,
                 ptt: false,
+                caption: caption
             }, { quoted: msg });
 
-            await sock.sendMessage(chat, { delete: statusMsg.key });
+            await sock.sendMessage(chat, {
+                text: templates.notification('Vesperr', 'Song sent successfully!', 'success'),
+                edit: statusMsg.key
+            });
 
         } catch (error) {
-            console.error('YTMP3 error:', error);
+            console.error('Vesperr Song Error:', error);
             await sock.sendMessage(chat, {
-                text: '❌ *Failed to download audio*',
-                edit: statusMsg.key,
+                text: templates.notification('Vesperr Error', error.message || 'Processing failed', 'error'),
+                edit: statusMsg.key
             });
         }
     },
@@ -420,7 +452,7 @@ export const ytsearch = {
 
         if (args.length === 0) {
             return sock.sendMessage(chat, {
-                text: `❓ *Usage:* \`${prefix}ytsearch <query>\``,
+                text: templates.notification('Usage', `\`${prefix}ytsearch <query>\``, 'info'),
             }, { quoted: msg });
         }
 
@@ -431,27 +463,26 @@ export const ytsearch = {
 
             if (results.length === 0) {
                 return sock.sendMessage(chat, {
-                    text: '❌ *No results found!*',
+                    text: templates.notification('Vesperr Search', 'No results found!', 'error'),
                 }, { quoted: msg });
             }
 
-            let text = `─── ✧ *YOUTUBE SEARCH* ✧ ───\n\n🔍 *"${query}"*\n\n`;
-
+            const searchItems = {};
             results.forEach((v, i) => {
-                text += `*${i + 1}.* ${v.title}\n`;
-                text += `   ⏱️ ${v.duration} | 👁️ ${formatViews(v.views)}\n`;
-                text += `   👤 ${v.author}\n`;
-                text += `   🔗 ${v.url}\n\n`;
+                searchItems[`${i + 1}. ${v.title.slice(0, 30)}...`] = `${v.duration} | ${v.author}`;
             });
 
-            text += `───────────────────\n_Use \`${prefix}yt <url>\` to download_`;
+            const text = templates.card('Vesperr Search', searchItems, {
+                icon: '🔍',
+                footer: `Use ${prefix}yt <url> to download`
+            });
 
             await sock.sendMessage(chat, { text }, { quoted: msg });
 
         } catch (error) {
             console.error('YT Search error:', error);
             await sock.sendMessage(chat, {
-                text: '❌ *Search failed*',
+                text: templates.notification('Vesperr Error', 'Search failed', 'error'),
             }, { quoted: msg });
         }
     },

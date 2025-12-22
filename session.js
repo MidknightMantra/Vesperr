@@ -330,7 +330,46 @@ class SessionManager {
                         timeout: FETCH_CONFIG.timeout,
                         headers: {
                             'User-Agent': 'WhatsApp-Session-Manager/1.0',
-                            'Accept': 'application/json, text/plain, *
+                            'Accept': 'application/json, text/plain, */*',
+                        },
+                        validateStatus: (status) => status < 500,
+                    });
+
+                    if (response.status === 404) {
+                        throw new Error('Session not found');
+                    }
+
+                    if (response.status !== 200) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    return response.data;
+                });
+
+                const parsed = await this.parseSessionData(data);
+
+                if (this.validateCredsStructure(parsed.creds || parsed)) {
+                    return { success: true, data: parsed };
+                }
+
+                throw new Error('Invalid session structure');
+            } catch (err) {
+                lastError = err;
+
+                if (attempt < FETCH_CONFIG.retries) {
+                    const backoff = Math.min(
+                        FETCH_CONFIG.backoffBase * Math.pow(2, attempt - 1),
+                        FETCH_CONFIG.backoffMax
+                    );
+                    log.debug(`Retry ${attempt}/${FETCH_CONFIG.retries} in ${backoff}ms...`);
+                    await this.delay(backoff);
+                }
+            }
+        }
+
+        return { success: false, error: lastError?.message || 'Unknown error' };
+    }
+
     async parseSessionData(data) {
 
         if (typeof data === 'object' && data !== null) {

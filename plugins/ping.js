@@ -5,7 +5,7 @@ export default {
     aliases: ['p', 'speed', 'bot'],
     category: 'core',
     description: 'Check bot response time',
-    react: '🎯',
+    react: '📡',
 
     async execute({ sock, msg }) {
         const jid = msg.key.remoteJid;
@@ -33,10 +33,10 @@ export default {
         };
 
         const getSpeed = (ms) => {
-            if (ms < 100) return '◉ Excellent';
-            if (ms < 300) return '◎ Good';
-            if (ms < 500) return '○ Moderate';
-            return '◌ Slow';
+            if (ms < 100) return '🚀 Perfect';
+            if (ms < 300) return '⚡ Stable';
+            if (ms < 500) return '📶 Normal';
+            return '🐢 Lag';
         };
 
         const formatMB = (bytes) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -44,7 +44,7 @@ export default {
         const response = templates.card(
             'Vesperr',
             {
-                'Pong': '🏓',
+                'Pong': '💠',
                 'Speed': `${responseTime}ms (${getSpeed(responseTime)})`,
                 'Uptime': formatUptime(uptime),
                 'Memory': formatMB(memUsage.heapUsed)
