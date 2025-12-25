@@ -1270,9 +1270,39 @@ VESPERR:`;
         { name: 'OR-Gemma', fn: () => askOpenRouterGemma(fullPrompt), timeout: 30000 },
     ];
 
-    for (const provider of providers) {
-        console.log(`[AI] Trying ${provider.name}...`);
+    // Try all providers in parallel - first to respond wins!
+    console.log(`[AI] Racing ${providers.length} providers...`);
+
+    const providerPromises = providers.map(async (provider) => {
+        const cb = getCircuitBreaker(provider.name);
+        if (!cb.canExecute()) {
+            console.log(`[AI] ${provider.name} - Circuit breaker open, skipping`);
+            return null;
+        }
+
+        console.log(`[AI] Starting ${provider.name}...`);
         const result = await tryProvider(provider.name, provider.fn, provider.timeout);
+
+        if (result) {
+            console.log(`[AI] ✓ ${provider.name} responded!`);
+            return result;
+        }
+        return null;
+    });
+
+    // Race all providers - first successful response wins
+    try {
+        const results = await Promise.all(
+            providerPromises.map(p =>
+                p.catch(err => {
+                    console.log(`[AI] Provider failed:`, err.message);
+                    return null;
+                })
+            )
+        );
+
+        // Find first successful result
+        const result = results.find(r => r && r.text && r.text.length > 10);
 
         if (result) {
             result.text = cleanResponse(result.text);
@@ -1285,6 +1315,8 @@ VESPERR:`;
             console.log(`[AI] ✓ Success from ${result.provider}`);
             return result;
         }
+    } catch (error) {
+        console.error('[AI] Parallel race error:', error);
     }
 
     return null;
