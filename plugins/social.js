@@ -876,5 +876,4 @@ export {
     saveProfile,
     afkUsers,
     reputation,
-    handleAntiViewOnce,
 };

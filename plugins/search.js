@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import { templates } from '../utils/deluxeUI.js';
 
 const CONFIG = {
     TIMEOUT: 15000,

@@ -1054,6 +1054,131 @@ async function askDarkShanBlackbox(prompt) {
     return { text, model: 'blackbox-darkshan' };
 }
 
+async function askHuggingFace(prompt) {
+    const response = await axios.post(
+        'https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct/v1/chat/completions',
+        {
+            model: 'meta-llama/Llama-3.2-3B-Instruct',
+            messages: [
+                { role: 'system', content: 'You are Vesperr, a helpful AI assistant. Always respond in English.' },
+                { role: 'user', content: prompt }
+            ],
+            max_tokens: 2000,
+            temperature: 0.7,
+            stream: false
+        },
+        {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY || 'hf_'}`
+            },
+            timeout: 30000
+        }
+    );
+
+    const text = response.data?.choices?.[0]?.message?.content;
+    if (!text || text.length < 5) throw new Error('Empty response');
+    return { text, model: 'llama-3.2-3b-hf' };
+}
+
+async function askDeepInfra(prompt) {
+    const response = await axios.post(
+        'https://api.deepinfra.com/v1/openai/chat/completions',
+        {
+            model: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
+            messages: [
+                { role: 'system', content: 'You are Vesperr, a helpful AI assistant. Always respond in English.' },
+                { role: 'user', content: prompt }
+            ],
+            max_tokens: 2000,
+            temperature: 0.8
+        },
+        {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.DEEPINFRA_API_KEY || ''}`
+            },
+            timeout: 30000
+        }
+    );
+
+    const text = response.data?.choices?.[0]?.message?.content;
+    if (!text || text.length < 5) throw new Error('Empty response');
+    return { text, model: 'llama-3.1-8b-deepinfra' };
+}
+
+async function askNexra(prompt) {
+    const response = await axios.post(
+        'https://nexra.aryahcr.cc/api/chat/complements',
+        {
+            messages: [
+                { role: 'system', content: 'You are Vesperr, a helpful AI assistant.' },
+                { role: 'user', content: prompt }
+            ],
+            markdown: false,
+            stream: false,
+            model: 'gpt-4o-free'
+        },
+        {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 30000
+        }
+    );
+
+    const text = response.data?.message || response.data?.gpt;
+    if (!text || text.length < 5) throw new Error('Empty response');
+    return { text, model: 'gpt-4o-nexra' };
+}
+
+async function askPollinations(prompt) {
+    const response = await axios.post(
+        'https://text.pollinations.ai/',
+        {
+            messages: [
+                { role: 'system', content: 'You are Vesperr, a helpful AI assistant created by MidKnightMantra.' },
+                { role: 'user', content: prompt }
+            ],
+            model: 'openai',
+            seed: Math.floor(Math.random() * 100000),
+            jsonMode: false
+        },
+        {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 30000
+        }
+    );
+
+    const text = typeof response.data === 'string' ? response.data : response.data?.text || response.data?.message;
+    if (!text || text.length < 5) throw new Error('Empty response');
+    return { text, model: 'pollinations' };
+}
+
+async function askTogetherAI(prompt) {
+    const response = await axios.post(
+        'https://api.together.xyz/v1/chat/completions',
+        {
+            model: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
+            messages: [
+                { role: 'system', content: 'You are Vesperr, a helpful AI assistant. Always respond in English.' },
+                { role: 'user', content: prompt }
+            ],
+            max_tokens: 2000,
+            temperature: 0.8
+        },
+        {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.TOGETHER_API_KEY || ''}`
+            },
+            timeout: 30000
+        }
+    );
+
+    const text = response.data?.choices?.[0]?.message?.content;
+    if (!text || text.length < 5) throw new Error('Empty response');
+    return { text, model: 'llama-3.1-8b-together' };
+}
+
 async function uploadToCatbox(buffer) {
     try {
 
@@ -1124,12 +1249,17 @@ VESPERR:`;
 
     const providers = [
         { name: 'DarkShan-GPT4o', fn: () => askDarkShanGPT4o(fullPrompt), timeout: 35000 },
-        { name: 'OR-Claude', fn: () => askOpenRouterClaude(fullPrompt), timeout: 30000 },
-        { name: 'DarkShan-Claude', fn: () => askDarkShanClaude(fullPrompt), timeout: 30000 },
         { name: 'Groq-Llama70B', fn: () => askGroq(fullPrompt), timeout: 30000 },
+        { name: 'OR-Claude', fn: () => askOpenRouterClaude(fullPrompt), timeout: 30000 },
+        { name: 'Nexra-GPT4o', fn: () => askNexra(fullPrompt), timeout: 30000 },
+        { name: 'DarkShan-Claude', fn: () => askDarkShanClaude(fullPrompt), timeout: 30000 },
+        { name: 'Pollinations', fn: () => askPollinations(fullPrompt), timeout: 30000 },
         { name: 'DarkShan-Blackbox', fn: () => askDarkShanBlackbox(fullPrompt), timeout: 35000 },
+        { name: 'DeepInfra-Llama', fn: () => askDeepInfra(fullPrompt), timeout: 30000 },
         { name: 'DarkShan-PublicAI', fn: () => askDarkShanPublicAI(fullPrompt), timeout: 30000 },
+        { name: 'Together-Llama', fn: () => askTogetherAI(fullPrompt), timeout: 30000 },
         { name: 'DarkShan-WebPilot', fn: () => askDarkShanWebPilot(fullPrompt), timeout: 30000 },
+        { name: 'HuggingFace-Llama', fn: () => askHuggingFace(fullPrompt), timeout: 30000 },
         { name: 'DarkShan-Perplexity', fn: () => askDarkShanPerplexity(fullPrompt), timeout: 30000 },
         { name: 'Groq-Mixtral', fn: () => askGroqMixtral(fullPrompt), timeout: 30000 },
         { name: 'DarkShan-Gemini', fn: () => askDarkShanGemini(fullPrompt), timeout: 30000 },
@@ -1242,12 +1372,13 @@ async function streamResponse(sock, chat, msgKey, text, options = {}) {
 function getStats() {
     const cbStats = Array.from(circuitBreakers.values()).map(cb => cb.getStats());
     const activeProviders = cbStats.filter(p => p.state === 'CLOSED').length;
+    const totalProviders = 20;
     return {
         conversations: memory.size,
         cacheSize: responseCache.size,
         providers: cbStats,
         activeProviders,
-        totalProviders: cbStats.length || 8,
+        totalProviders: cbStats.length > 0 ? cbStats.length : totalProviders,
         healthScore: cbStats.length > 0 ? Math.round((activeProviders / cbStats.length) * 100) : 100
     };
 }
@@ -1260,8 +1391,11 @@ function generateHelp(prefix = '.') {
             `*${prefix}ai -v* — voice response`,
             `*${prefix}ai clear* — reset memory`,
             `*${prefix}ai stats* — usage stats`,
+            `*${prefix}ai providers* — show AI providers status`,
+            `*${prefix}ai export* — export conversation`,
+            `*${prefix}ai set <mode>* — change persona (code/creative/casual/support/analysis)`,
             '',
-            'I remember context and can analyze images if you reply to one.'
+            'I remember context, analyze images, search the web, and have 20+ AI models backing me up!'
         ],
         { footer: 'Your personal AI assistant' }
     );
@@ -1305,6 +1439,71 @@ function getThinkingMessage(intent) {
     return msgs[Math.floor(Math.random() * msgs.length)];
 }
 
+function generateProvidersStatus() {
+    const stats = getStats();
+    const cbStats = stats.providers;
+
+    if (cbStats.length === 0) {
+        return templates.card('AI Providers', ['All providers ready', `Total: ${stats.totalProviders}`, `Health: ${stats.healthScore}%`]);
+    }
+
+    const active = [];
+    const degraded = [];
+    const offline = [];
+
+    cbStats.forEach(p => {
+        const status = `${p.name}: ${p.successRate} (${p.avgTime})`;
+        if (p.state === 'CLOSED') active.push(`✅ ${status}`);
+        else if (p.state === 'HALF_OPEN') degraded.push(`⚠️ ${status}`);
+        else offline.push(`❌ ${status}`);
+    });
+
+    const lines = [
+        `*Health Score:* ${stats.healthScore}%`,
+        `*Active:* ${active.length}/${stats.totalProviders}`,
+        '',
+        ...active.slice(0, 5),
+        ...(degraded.length > 0 ? ['', '*Degraded:*', ...degraded.slice(0, 3)] : []),
+        ...(offline.length > 0 ? ['', '*Offline:*', ...offline.slice(0, 3)] : [])
+    ];
+
+    return templates.card('AI Providers Status', lines);
+}
+
+function exportConversation(chat, user) {
+    const conv = getConversation(chat, user);
+    if (!conv || conv.history.length === 0) {
+        return 'No conversation history to export.';
+    }
+
+    const lines = [
+        `─── CONVERSATION EXPORT ───`,
+        `Messages: ${conv.messageCount}`,
+        `Started: ${new Date(conv.createdAt).toLocaleString()}`,
+        `Language: ${conv.metadata.language}`,
+        `Persona: ${conv.metadata.persona || 'default'}`,
+        '',
+        '─── MESSAGES ───',
+        ''
+    ];
+
+    conv.history.forEach((msg, i) => {
+        const time = new Date(msg.timestamp).toLocaleTimeString();
+        const role = msg.role === 'user' ? '👤 User' : '🤖 Vesperr';
+        lines.push(`[${time}] ${role}:`);
+        lines.push(msg.content);
+        lines.push('');
+    });
+
+    if (conv.summaries.length > 0) {
+        lines.push('─── EARLIER SUMMARY ───');
+        lines.push('');
+        lines.push(conv.summaries[conv.summaries.length - 1].text);
+    }
+
+    return lines.join('\n');
+}
+
 const clearMessages = [
     "◈ Memory cleared ✦",
     "◈ Fresh start ✦",
@@ -1345,6 +1544,15 @@ export default {
 
         if (cmd === 'stats' || cmd === 'status') {
             return sock.sendMessage(chat, { text: generateStatsMessage(user, chat, user) }, { quoted: msg });
+        }
+
+        if (cmd === 'providers' || cmd === 'provider' || cmd === 'health') {
+            return sock.sendMessage(chat, { text: generateProvidersStatus() }, { quoted: msg });
+        }
+
+        if (cmd === 'export' || cmd === 'save' || cmd === 'download') {
+            const exported = exportConversation(chat, user);
+            return sock.sendMessage(chat, { text: exported }, { quoted: msg });
         }
 
         if (['clear', 'reset', 'forget', 'new'].includes(cmd)) {
