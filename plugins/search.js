@@ -32,7 +32,7 @@ export const google = {
 
         try {
             const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`;
-            const response = await fetch(url, { timeout: CONFIG.TIMEOUT });
+            const response = await fetch(url);
             const data = await response.json();
 
             let header = templates.header('SEARCH', query.toUpperCase());
@@ -97,7 +97,7 @@ export const wiki = {
 
         try {
             const searchUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
-            let response = await fetch(searchUrl, { timeout: CONFIG.TIMEOUT });
+            let response = await fetch(searchUrl);
 
             if (!response.ok) {
                 const searchApi = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=1&format=json`;
@@ -167,6 +167,7 @@ export const lyrics = {
             const apis = [
                 async () => {
                     const suggestRes = await fetch(`https://api.lyrics.ovh/suggest/${encodeURIComponent(query)}`);
+                    if (!suggestRes.ok) return null;
                     const suggestData = await suggestRes.json();
                     if (suggestData.data?.[0]) {
                         const { artist, title } = suggestData.data[0];
@@ -177,19 +178,29 @@ export const lyrics = {
                     return null;
                 },
                 async () => {
-                    const res = await fetch(`https://api.happi.dev/v1/music?q=${encodeURIComponent(query)}&lyrics=1&limit=1`);
+                    const res = await fetch(`https://some-random-api.com/lyrics?title=${encodeURIComponent(query)}`);
+                    if (!res.ok) return null;
                     const data = await res.json();
-                    if (data.success && data.result?.[0]?.lyrics) {
-                        const song = data.result[0];
-                        return { title: song.track, artist: song.artist, lyrics: song.lyrics };
+                    if (data.lyrics) {
+                        return { title: data.title, artist: data.author, lyrics: data.lyrics };
                     }
                     return null;
                 },
                 async () => {
-                    const res = await fetch(`https://api.giftedtech.co.ke/api/search/lyrics?query=${encodeURIComponent(query)}`);
+                    const res = await fetch(`https://api.giftedtech.co.ke/api/search/lyrics?apikey=gifted&query=${encodeURIComponent(query)}`);
+                    if (!res.ok) return null;
                     const data = await res.json();
                     if (data.status && data.result) {
-                        return { title: data.result.title, artist: data.result.artist, lyrics: data.result.lyrics };
+                        return { title: data.result.title || query, artist: data.result.artist || 'Unknown', lyrics: data.result.lyrics };
+                    }
+                    return null;
+                },
+                async () => {
+                    const res = await fetch(`https://lyrist.vercel.app/api/${encodeURIComponent(query)}`);
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    if (data.lyrics) {
+                        return { title: data.title || query, artist: data.artist || 'Unknown', lyrics: data.lyrics };
                     }
                     return null;
                 },
@@ -471,7 +482,7 @@ export const wallpaper = {
             const _0x1a2b = (s) => Buffer.from(s, 'base64').toString('utf-8');
             const _0xkey = _0x1a2b('ZmVhZTVlNDIyMDBmNDY3Yg==');
 
-            const res = await fetch(`https://api-dark-shan-yt.koyeb.app/search/wallpaper?q=${encodeURIComponent(query)}&apikey=${_0xkey}`, { timeout: CONFIG.TIMEOUT });
+            const res = await fetch(`https://api-dark-shan-yt.koyeb.app/search/wallpaper?q=${encodeURIComponent(query)}&apikey=${_0xkey}`);
             const data = await res.json();
 
             let imageUrl = null;
@@ -544,7 +555,7 @@ export const stickersearch = {
             const _0x1a2b = (s) => Buffer.from(s, 'base64').toString('utf-8');
             const _0xkey = _0x1a2b('ZmVhZTVlNDIyMDBmNDY3Yg==');
 
-            const res = await fetch(`https://api-dark-shan-yt.koyeb.app/search/sticker?q=${encodeURIComponent(query)}&apikey=${_0xkey}`, { timeout: CONFIG.TIMEOUT });
+            const res = await fetch(`https://api-dark-shan-yt.koyeb.app/search/sticker?q=${encodeURIComponent(query)}&apikey=${_0xkey}`);
             const data = await res.json();
 
             let stickerUrl = null;
@@ -608,25 +619,57 @@ export const bible = {
         try {
             const apis = [
                 async () => {
-                    const res = await fetch(`https://bible-api.com/${encodeURIComponent(reference)}`, { timeout: CONFIG.TIMEOUT });
+                    const res = await fetch(`https://bible-api.com/${encodeURIComponent(reference)}`);
+                    if (!res.ok) return null;
                     const data = await res.json();
                     if (data.text) return { reference: data.reference, text: data.text, translation: data.translation_name || 'WEB' };
                     return null;
                 },
                 async () => {
-                    const res = await fetch(`https://api.scripture.api.bible/v1/bibles/de4e12af7f28f599-02/search?query=${encodeURIComponent(reference)}`, {
-                        headers: { 'api-key': '7f8e9a0b1c2d3e4f5a6b7c8d9e0f1a2b' },
-                        timeout: CONFIG.TIMEOUT,
-                    });
+                    const res = await fetch(`https://labs.bible.org/api/?passage=${encodeURIComponent(reference)}&type=json`);
+                    if (!res.ok) return null;
                     const data = await res.json();
-                    if (data.data?.passages?.[0]) {
-                        const passage = data.data.passages[0];
-                        return { reference: passage.reference, text: passage.content.replace(/<[^>]*>/g, ''), translation: 'KJV' };
+                    if (Array.isArray(data) && data.length > 0) {
+                        const verses = data.map(v => v.text).join(' ');
+                        const ref = `${data[0].bookname} ${data[0].chapter}:${data[0].verse}`;
+                        return { reference: ref, text: verses, translation: 'NET' };
                     }
                     return null;
                 },
                 async () => {
-                    const res = await fetch(`https://api.giftedtech.co.ke/api/search/bible?query=${encodeURIComponent(reference)}`, { timeout: CONFIG.TIMEOUT });
+                    const res = await fetch(`https://bolls.life/get-verse/WEB/${encodeURIComponent(reference)}/`);
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    if (data.text) return { reference: reference, text: data.text, translation: 'WEB' };
+                    return null;
+                },
+                async () => {
+                    const res = await fetch(`https://cdn.jsdelivr.net/gh/wldeh/bible-api/bibles/en-asv.json`);
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    const parts = reference.match(/(\d?\s*\w+)\s+(\d+):(\d+)/i);
+                    if (parts && data.books) {
+                        const bookName = parts[1].trim();
+                        const chapter = parts[2];
+                        const verse = parts[3];
+                        for (const book of data.books) {
+                            if (book.name.toLowerCase().includes(bookName.toLowerCase())) {
+                                const chapterData = book.chapters[parseInt(chapter) - 1];
+                                if (chapterData && chapterData.verses[parseInt(verse) - 1]) {
+                                    return {
+                                        reference: `${book.name} ${chapter}:${verse}`,
+                                        text: chapterData.verses[parseInt(verse) - 1],
+                                        translation: 'ASV'
+                                    };
+                                }
+                            }
+                        }
+                    }
+                    return null;
+                },
+                async () => {
+                    const res = await fetch(`https://api.giftedtech.co.ke/api/search/bible?apikey=gifted&query=${encodeURIComponent(reference)}`);
+                    if (!res.ok) return null;
                     const data = await res.json();
                     if (data.status && data.result) return { reference: data.result.reference || reference, text: data.result.text || data.result.verse, translation: data.result.translation || 'NIV' };
                     return null;
@@ -638,7 +681,10 @@ export const bible = {
                 try {
                     result = await api();
                     if (result?.text) break;
-                } catch (e) { continue; }
+                } catch (e) {
+                    console.error('Bible API error:', e);
+                    continue;
+                }
             }
 
             if (result?.text) {
@@ -658,6 +704,7 @@ export const bible = {
             }
 
         } catch (error) {
+            console.error('Bible command error:', error);
             await sock.sendMessage(chat, {
                 text: templates.error('Error', 'Failed to fetch Bible verse.'),
                 edit: statusMsg.key
@@ -973,27 +1020,95 @@ export const crypto = {
         }, { quoted: msg });
 
         try {
-            const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coin}`);
-            const data = await res.json();
+            const apis = [
+                async () => {
+                    const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coin}`);
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    if (data.id && data.market_data) {
+                        const m = data.market_data;
+                        return {
+                            name: data.name,
+                            symbol: data.symbol.toUpperCase(),
+                            price: m.current_price.usd,
+                            change24h: m.price_change_percentage_24h,
+                            change7d: m.price_change_percentage_7d,
+                            high24h: m.high_24h.usd,
+                            low24h: m.low_24h.usd,
+                            marketCap: m.market_cap.usd,
+                            rank: data.market_cap_rank
+                        };
+                    }
+                    return null;
+                },
+                async () => {
+                    const res = await fetch(`https://api.coincap.io/v2/assets/${coin}`);
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    if (data.data) {
+                        const d = data.data;
+                        return {
+                            name: d.name,
+                            symbol: d.symbol,
+                            price: parseFloat(d.priceUsd),
+                            change24h: parseFloat(d.changePercent24Hr || 0),
+                            change7d: 0,
+                            high24h: 0,
+                            low24h: 0,
+                            marketCap: parseFloat(d.marketCapUsd || 0),
+                            rank: d.rank
+                        };
+                    }
+                    return null;
+                },
+                async () => {
+                    const res = await fetch(`https://api.coinbase.com/v2/prices/${coin}-USD/spot`);
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    if (data.data?.amount) {
+                        return {
+                            name: coin.charAt(0).toUpperCase() + coin.slice(1),
+                            symbol: coin.toUpperCase(),
+                            price: parseFloat(data.data.amount),
+                            change24h: 0,
+                            change7d: 0,
+                            high24h: 0,
+                            low24h: 0,
+                            marketCap: 0,
+                            rank: 'N/A'
+                        };
+                    }
+                    return null;
+                }
+            ];
 
-            if (data.id) {
-                const header = templates.header('CRYPTO', data.name.toUpperCase());
-                const m = data.market_data;
-                const change24h = m.price_change_percentage_24h;
-                const changeEmoji = change24h >= 0 ? '📈' : '📉';
+            let result = null;
+            for (const api of apis) {
+                try {
+                    result = await api();
+                    if (result) break;
+                } catch (e) {
+                    console.error('Crypto API error:', e);
+                    continue;
+                }
+            }
+
+            if (result) {
+                const header = templates.header('CRYPTO', result.name.toUpperCase());
+                const changeEmoji = result.change24h >= 0 ? '📈' : '📉';
 
                 const info = [
-                    `💵 Price: *$${m.current_price.usd.toLocaleString()}*`,
-                    `${changeEmoji} 24h: ${change24h?.toFixed(2)}%`,
-                    `📊 7d: ${m.price_change_percentage_7d?.toFixed(2)}%`,
-                    `📈 24h High: $${m.high_24h.usd.toLocaleString()}`,
-                    `📉 24h Low: $${m.low_24h.usd.toLocaleString()}`,
-                    `💰 Market Cap: $${(m.market_cap.usd / 1e9).toFixed(2)}B`,
-                    `🏆 Global Rank: #${data.market_cap_rank}`
-                ];
+                    `💵 Price: *$${result.price.toLocaleString()}*`,
+                    result.change24h !== 0 ? `${changeEmoji} 24h: ${result.change24h?.toFixed(2)}%` : null,
+                    result.change7d !== 0 ? `📊 7d: ${result.change7d?.toFixed(2)}%` : null,
+                    result.high24h !== 0 ? `📈 24h High: $${result.high24h.toLocaleString()}` : null,
+                    result.low24h !== 0 ? `📉 24h Low: $${result.low24h.toLocaleString()}` : null,
+                    result.marketCap !== 0 ? `💰 Market Cap: $${(result.marketCap / 1e9).toFixed(2)}B` : null,
+                    result.rank !== 'N/A' ? `🏆 Global Rank: #${result.rank}` : null
+                ].filter(Boolean);
 
                 await sock.sendMessage(chat, {
-                    text: `${header}\n(${data.symbol.toUpperCase()})\n\n${templates.list('Market Stats', info, { bullet: '₿', border: 'none' })}\n\n${templates.footer()}`,
+                    text: `${header}\n(${result.symbol})\n\n${templates.list('Market Stats', info, { bullet: '₿', border: 'none' })}\n\n${templates.footer()}`,
                     edit: statusMsg.key,
                 });
             } else {
@@ -1003,6 +1118,7 @@ export const crypto = {
                 });
             }
         } catch (error) {
+            console.error('Crypto command error:', error);
             await sock.sendMessage(chat, {
                 text: templates.error('Error', 'Price lookup failed.'),
                 edit: statusMsg.key
@@ -1028,13 +1144,63 @@ export const news = {
         }, { quoted: msg });
 
         try {
-            const res = await fetch(`https://gnews.io/api/v4/search?q=${encodeURIComponent(topic)}&lang=en&max=5&token=demo`);
-            const data = await res.json();
+            const apis = [
+                async () => {
+                    const res = await fetch(`https://gnews.io/api/v4/search?q=${encodeURIComponent(topic)}&lang=en&max=5&token=demo`);
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    if (data.articles?.length) {
+                        return data.articles.slice(0, 5).map(a => ({
+                            title: a.title,
+                            source: a.source.name,
+                            url: a.url
+                        }));
+                    }
+                    return null;
+                },
+                async () => {
+                    const res = await fetch(`https://newsapi.org/v2/everything?q=${encodeURIComponent(topic)}&language=en&pageSize=5&apiKey=demo`);
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    if (data.articles?.length) {
+                        return data.articles.slice(0, 5).map(a => ({
+                            title: a.title,
+                            source: a.source.name,
+                            url: a.url
+                        }));
+                    }
+                    return null;
+                },
+                async () => {
+                    const res = await fetch(`https://api.giftedtech.co.ke/api/search/news?apikey=gifted&query=${encodeURIComponent(topic)}`);
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    if (data.status && data.result?.articles) {
+                        return data.result.articles.slice(0, 5).map(a => ({
+                            title: a.title || a.headline,
+                            source: a.source || 'News Source',
+                            url: a.url || a.link || '#'
+                        }));
+                    }
+                    return null;
+                }
+            ];
 
-            if (data.articles?.length) {
+            let articles = null;
+            for (const api of apis) {
+                try {
+                    articles = await api();
+                    if (articles && articles.length > 0) break;
+                } catch (e) {
+                    console.error('News API error:', e);
+                    continue;
+                }
+            }
+
+            if (articles && articles.length > 0) {
                 const header = templates.header('NEWS', topic.toUpperCase());
-                const headlines = data.articles.slice(0, 5).map(a =>
-                    `*${a.title}*\n_${a.source.name} • [Read](${a.url})_`
+                const headlines = articles.map(a =>
+                    `*${a.title}*\n_${a.source} • [Read](${a.url})_`
                 );
 
                 await sock.sendMessage(chat, {
@@ -1048,6 +1214,7 @@ export const news = {
                 });
             }
         } catch (error) {
+            console.error('News command error:', error);
             await sock.sendMessage(chat, {
                 text: templates.error('Error', 'News service unavailable.'),
                 edit: statusMsg.key

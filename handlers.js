@@ -16,6 +16,7 @@ import { log } from './utils/logger.js';
 import { jidToPhone, phoneToJid } from './utils/jid.js';
 import xss from 'xss';
 import { LRUCache as LRU } from 'lru-cache';
+import { handleAntiViewOnce } from './plugins/social.js';
 
 const cooldownCache = new LRU({
     max: 5000,
@@ -552,6 +553,8 @@ export async function handleMessage(sock, msg, extra = {}) {
         const ctx = await buildContext(sock, msg, extra);
 
         console.log(`[DEBUG] Message from ${ctx.senderNumber}: "${ctx.body}" (type: ${ctx.messageType})`);
+
+        await handleAntiViewOnce(sock, msg);
 
         if (ctx.reaction) {
             await handleReaction(ctx);

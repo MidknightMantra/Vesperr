@@ -1,4 +1,5 @@
 import { LRUCache } from 'lru-cache';
+import config from '../config.js';
 
 const CONFIG = {
     CURRENCY_NAME: 'Coins',
@@ -78,15 +79,17 @@ export const balance = {
         const total = user.wallet + user.bank;
         const targetName = mentioned ? `@${targetJid.split('@')[0]}` : 'Your';
 
+        let footer = `━━━━━━━━━━━━\n💎 *Total:* ${total.toLocaleString()} ${CONFIG.CURRENCY_NAME}`;
+        if (config.levelingEnabled) {
+            footer += `\n\n📊 Level: ${user.level} | XP: ${user.xp}`;
+        }
+
         await sock.sendMessage(chat, {
             text: `💰 *${targetName} Balance*
-
-${CONFIG.CURRENCY_SYMBOL} *Wallet:* ${user.wallet.toLocaleString()}
-🏦 *Bank:* ${user.bank.toLocaleString()}
-━━━━━━━━━━━━
-💎 *Total:* ${total.toLocaleString()} ${CONFIG.CURRENCY_NAME}
-
-📊 Level: ${user.level} | XP: ${user.xp}`,
+ 
+ ${CONFIG.CURRENCY_SYMBOL} *Wallet:* ${user.wallet.toLocaleString()}
+ 🏦 *Bank:* ${user.bank.toLocaleString()}
+ ${footer}`,
             mentions: mentioned ? [targetJid] : [],
         }, { quoted: msg });
     },
@@ -134,7 +137,7 @@ export const daily = {
         user.wallet += total;
         user.lastDaily = now;
         user.dailyStreak = streak;
-        user.xp += 50;
+        if (config.levelingEnabled) user.xp += 50;
         saveUser(userJid, user);
 
         await sock.sendMessage(chat, {
@@ -200,7 +203,7 @@ export const work = {
 
         user.wallet += earnings;
         user.lastWork = now;
-        user.xp += 25;
+        if (config.levelingEnabled) user.xp += 25;
         saveUser(userJid, user);
 
         await sock.sendMessage(chat, {
@@ -513,7 +516,7 @@ export const slots = {
         const profit = winnings - bet;
 
         user.wallet += profit;
-        user.xp += Math.abs(profit) > 0 ? 10 : 5;
+        if (config.levelingEnabled) user.xp += Math.abs(profit) > 0 ? 10 : 5;
         saveUser(userJid, user);
 
         await sock.sendMessage(chat, {
@@ -570,7 +573,7 @@ export const coinflip = {
         } else {
             user.wallet -= bet;
         }
-        user.xp += 10;
+        if (config.levelingEnabled) user.xp += 10;
         saveUser(userJid, user);
 
         await sock.sendMessage(chat, {

@@ -1,6 +1,7 @@
 import { LRUCache } from 'lru-cache';
 import fetch from 'node-fetch';
 import { levelBar } from '../utils/deluxeUI.js';
+import config from '../config.js';
 
 const afkUsers = new LRUCache({ max: 10000, ttl: 86400000 * 7 });
 const profiles = new LRUCache({ max: 50000, ttl: 86400000 * 365 });
@@ -45,6 +46,7 @@ function xpForLevel(level) {
 export async function addMessageXP(sock, msg) {
     const jid = msg.key.participant || msg.key.remoteJid;
     if (jid.includes('broadcast')) return;
+    if (!config.levelingEnabled) return;
 
     const profile = getProfile(jid);
     const now = Date.now();
@@ -177,20 +179,11 @@ export const profile = {
 
         const prof = getProfile(targetJid);
         const rep = reputation.get(targetJid.split('@')[0]) || 0;
-        const nextLevelXp = xpForLevel(prof.level + 1);
-        const progress = Math.floor((prof.xp / nextLevelXp) * 100);
 
-        const filled = Math.floor(progress / 10);
-        const progressBar = '█'.repeat(filled) + '░'.repeat(10 - filled);
-
-        const badges = prof.badges?.length > 0 ? prof.badges.join(' ') : '_None_';
-
-        const text = `┌── 『 *USER PROFILE* 』 ──┐
-│
-│ 👤 *User:* @${targetJid.split('@')[0]}
-│ 📝 *Bio:* ${prof.bio || '_Not set_'}
-│
-┝╾─────── Statistics ───────╼
+        let levelingStats = '';
+        if (config.levelingEnabled) {
+            const nextLevelXp = xpForLevel(prof.level + 1);
+            levelingStats = `┝╾─────── Statistics ───────╼
 │ 🌟 *Level:* ${prof.level}
 │ 💬 *Messages:* ${prof.messages.toLocaleString()}
 │ 💠 *Reputation:* ${rep >= 0 ? '+' : ''}${rep}
@@ -199,6 +192,25 @@ export const profile = {
 ┝╾─────── Progression ──────╼
 │ 🪐 *Next Level:* ${prof.level + 1}
 │ 📊 [${levelBar(prof.xp % 100, 100, 15)}]
+│`;
+        } else {
+            levelingStats = `┝╾─────── Statistics ───────╼
+│ 💬 *Messages:* ${prof.messages.toLocaleString()}
+│ 💠 *Reputation:* ${rep >= 0 ? '+' : ''}${rep}
+│ 📊 *Leveling:* _Disabled_
+│`;
+        }
+
+
+
+        const badges = prof.badges?.length > 0 ? prof.badges.join(' ') : '_None_';
+
+        const text = `┌── 『 *USER PROFILE* 』 ──┐
+│
+│ 👤 *User:* @${targetJid.split('@')[0]}
+│ 📝 *Bio:* ${prof.bio || '_Not set_'}
+│
+${levelingStats}
 │
 ┝╾──────── Badges ────────╼
 │ 🧿 ${badges}
@@ -221,6 +233,9 @@ export const level = {
 
     async execute({ sock, msg }) {
         const chat = msg.key.remoteJid;
+        if (!config.levelingEnabled) {
+            return sock.sendMessage(chat, { text: '❌ *Leveling system is currently disabled.*' }, { quoted: msg });
+        }
         const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
         const targetJid = mentioned || msg.key.participant || msg.key.remoteJid;
 
@@ -282,6 +297,42 @@ export const rep = {
     },
 };
 
+export const levelingToggle = {
+    name: 'leveling',
+    alias: ['lvltoggle', 'setup-leveling'],
+    category: 'social',
+    desc: 'Toggle leveling system on/off',
+    usage: '.leveling [on/off]',
+    cooldown: 5000,
+    react: '⚙️',
+
+    async execute({ sock, msg, args, isAdmin, isOwner }) {
+        const chat = msg.key.remoteJid;
+        if (!isAdmin && !isOwner) {
+            return sock.sendMessage(chat, { text: '❌ *Admins only!*' }, { quoted: msg });
+        }
+
+        if (args.length === 0) {
+            return sock.sendMessage(chat, {
+                text: `─── ☆ *LEVELING* ☆ ───\n\n📊 *Status:* ${config.levelingEnabled ? '✅ Enabled' : '❌ Disabled'}\n\n★ *Usage:* \`.leveling on\` or \`.leveling off\`\n\n───────────────────\n_*Vesperr* ⋆ Social_`,
+            }, { quoted: msg });
+        }
+
+        const action = args[0].toLowerCase();
+        if (action === 'on' || action === 'enable') {
+            config.levelingEnabled = true;
+            config.save();
+            await sock.sendMessage(chat, { text: '✅ *Leveling system has been enabled.*' }, { quoted: msg });
+        } else if (action === 'off' || action === 'disable') {
+            config.levelingEnabled = false;
+            config.save();
+            await sock.sendMessage(chat, { text: '❌ *Leveling system has been disabled.*' }, { quoted: msg });
+        } else {
+            await sock.sendMessage(chat, { text: '❓ *Invalid action. Use "on" or "off".*' }, { quoted: msg });
+        }
+    },
+};
+
 export const levels = {
     name: 'levels',
     alias: ['xpleaderboard', 'toplevel', 'lvlboard'],
@@ -293,6 +344,9 @@ export const levels = {
 
     async execute({ sock, msg }) {
         const chat = msg.key.remoteJid;
+        if (!config.levelingEnabled) {
+            return sock.sendMessage(chat, { text: '❌ *Leveling system is currently disabled.*' }, { quoted: msg });
+        }
 
         const allProfiles = Array.from(profiles.entries());
         const sorted = allProfiles
@@ -633,6 +687,145 @@ export const slap = {
     },
 };
 
+export const vv = {
+    name: 'vv',
+    alias: ['viewonce', 'reveal'],
+    category: 'social',
+    desc: 'Reveal view once message',
+    usage: '.vv (reply to view once)',
+    cooldown: 3000,
+    react: '👁️',
+    async execute({ sock, msg, isGroup }) {
+        const chat = msg.key.remoteJid;
+        const userJid = msg.key.participant || msg.key.remoteJid;
+        const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+
+        if (!quoted) {
+            return sock.sendMessage(chat, {
+                text: `─── ☆ *VIEW ONCE* ☆ ───\n\n👁️ *Reveal ViewOnce*\n\n★ *Usage:* Reply to a view once message\n${isGroup ? '📢 Group: Reveals in chat' : '💾 Private: Sends to your saved messages'}\n\n───────────────────\n_*Vesperr* ⋆ Social_`,
+            }, { quoted: msg });
+        }
+
+        const viewOnceMessage = quoted.viewOnceMessageV2?.message || quoted.viewOnceMessage?.message;
+
+        if (!viewOnceMessage) {
+            return sock.sendMessage(chat, {
+                text: '❌ *Please reply to a view once message.*'
+            }, { quoted: msg });
+        }
+
+        try {
+            const quotedMsg = {
+                key: {
+                    remoteJid: chat,
+                    id: msg.message.extendedTextMessage.contextInfo.stanzaId,
+                    participant: msg.message.extendedTextMessage.contextInfo.participant
+                },
+                message: quoted
+            };
+
+            const sender = msg.message.extendedTextMessage.contextInfo.participant || chat;
+            const senderName = sender.split('@')[0];
+
+            const targetChat = isGroup ? chat : userJid;
+
+            if (viewOnceMessage.imageMessage) {
+                const media = await sock.downloadMediaMessage(quotedMsg);
+                await sock.sendMessage(targetChat, {
+                    image: media,
+                    caption: `Vesperr Reveal\n\nFrom: @${senderName}\n${viewOnceMessage.imageMessage.caption || ''}`,
+                    mentions: [sender]
+                });
+
+                if (!isGroup) {
+                    await sock.sendMessage(chat, {
+                        text: 'Vesperr Revealed'
+                    }, { quoted: msg });
+                }
+            } else if (viewOnceMessage.videoMessage) {
+                const media = await sock.downloadMediaMessage(quotedMsg);
+                await sock.sendMessage(targetChat, {
+                    video: media,
+                    caption: `Vesperr Reveal\n\nFrom: @${senderName}\n${viewOnceMessage.videoMessage.caption || ''}`,
+                    mentions: [sender]
+                });
+
+                if (!isGroup) {
+                    await sock.sendMessage(chat, {
+                        text: 'Vesperr Revealed'
+                    }, { quoted: msg });
+                }
+            } else if (viewOnceMessage.audioMessage) {
+                const media = await sock.downloadMediaMessage(quotedMsg);
+                await sock.sendMessage(targetChat, {
+                    audio: media,
+                    mimetype: 'audio/mp4',
+                    ptt: viewOnceMessage.audioMessage.ptt || false
+                });
+                await sock.sendMessage(targetChat, {
+                    text: `Vesperr Reveal\n\nFrom: @${senderName}`,
+                    mentions: [sender]
+                });
+
+                if (!isGroup) {
+                    await sock.sendMessage(chat, {
+                        text: 'Vesperr Revealed'
+                    }, { quoted: msg });
+                }
+            }
+        } catch (error) {
+            console.error('View once reveal error:', error);
+            await sock.sendMessage(chat, {
+                text: '❌ *Failed to reveal view once message.*'
+            }, { quoted: msg });
+        }
+    },
+};
+
+export async function handleAntiViewOnce(sock, msg) {
+    if (!config.antiViewOnce) return;
+
+    const chat = msg.key.remoteJid;
+    const sender = msg.key.participant || msg.key.remoteJid;
+    const message = msg.message;
+
+    if (!message) return;
+
+    const viewOnceMessage = message.viewOnceMessageV2?.message || message.viewOnceMessage?.message;
+
+    if (viewOnceMessage) {
+        try {
+            const senderName = sender.split('@')[0];
+
+            if (viewOnceMessage.imageMessage) {
+                const media = await sock.downloadMediaMessage(msg);
+                await sock.sendMessage(chat, {
+                    image: media,
+                    caption: `Vesperr Reveal\n\nFrom: @${senderName}\n${viewOnceMessage.imageMessage.caption || ''}`,
+                    mentions: [sender]
+                });
+            } else if (viewOnceMessage.videoMessage) {
+                const media = await sock.downloadMediaMessage(msg);
+                await sock.sendMessage(chat, {
+                    video: media,
+                    caption: `Vesperr Reveal\n\nFrom: @${senderName}\n${viewOnceMessage.videoMessage.caption || ''}`,
+                    mentions: [sender]
+                });
+            } else if (viewOnceMessage.audioMessage) {
+                const media = await sock.downloadMediaMessage(msg);
+                await sock.sendMessage(chat, {
+                    audio: media,
+                    mimetype: 'audio/mp4',
+                    caption: `Vesperr Reveal\n\nFrom: @${senderName}`,
+                    mentions: [sender]
+                });
+            }
+        } catch (error) {
+            console.error('Anti-ViewOnce error:', error);
+        }
+    }
+}
+
 export const xpTracker = {
     category: 'social',
     desc: 'Internal XP tracker',
@@ -661,6 +854,7 @@ export const socialCommands = [
     bio,
     profile,
     level,
+    levelingToggle,
     rep,
     levels,
     seen,
@@ -671,6 +865,7 @@ export const socialCommands = [
     shoutout,
     hug,
     slap,
+    vv,
     xpTracker
 ];
 
@@ -681,4 +876,5 @@ export {
     saveProfile,
     afkUsers,
     reputation,
+    handleAntiViewOnce,
 };

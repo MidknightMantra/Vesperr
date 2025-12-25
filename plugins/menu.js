@@ -1,5 +1,6 @@
 import { templates, emoji, format, levelBar } from '../utils/deluxeUI.js';
 import { getProfile, reputation } from './social.js';
+import config from '../config.js';
 
 const CONFIG = {
     BOT_NAME: process.env.BOT_NAME || 'Vesperr',
@@ -143,9 +144,11 @@ const menuPlugin = {
         mainDashboard += `│ ${greeting.emoji} ${greeting.text}, *${pushName}*\n`;
         mainDashboard += `│ 📅 ${date} | ⏱️ ${new Date().toLocaleTimeString()}\n`;
         mainDashboard += `┝╾──────── User Status ────────╼\n`;
-        mainDashboard += `│ 💠 *Rank:* ${prof.level >= 50 ? 'Elite' : prof.level >= 20 ? 'Officer' : 'Recruit'}\n`;
-        mainDashboard += `│ 🌟 *Level:* ${prof.level} | *XP:* ${prof.xp}\n`;
-        mainDashboard += `│ 📊 [${levelBar(prof.xp % 100, 100, 10)}]\n`;
+        if (config.levelingEnabled) {
+            mainDashboard += `│ 💠 *Rank:* ${prof.level >= 50 ? 'Elite' : prof.level >= 20 ? 'Officer' : 'Recruit'}\n`;
+            mainDashboard += `│ 🌟 *Level:* ${prof.level} | *XP:* ${prof.xp}\n`;
+            mainDashboard += `│ 📊 [${levelBar(prof.xp % 100, 100, 10)}]\n`;
+        }
         mainDashboard += `│ 🏆 *Reputation:* ${rep >= 0 ? '+' : ''}${rep}\n`;
         mainDashboard += `┝╾──────── Bot Information ──────╼\n`;
         mainDashboard += `│ 🤖 *Build:* v3.0 Stable\n`;

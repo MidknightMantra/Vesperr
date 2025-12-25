@@ -94,6 +94,7 @@ const config = {
     autoReadStatus: env('AUTO_READ_STATUS', false),
     autoTyping: env('AUTO_TYPING', true),
     typingDuration: env('TYPING_DURATION', 1500),
+    levelingEnabled: env('LEVELING_ENABLED', false),
 
     database: {
         type: env('DB_TYPE', 'json'),
@@ -249,6 +250,7 @@ const config = {
             premiumUsers: this.premiumUsers,
             bannedUsers: this.bannedUsers,
             antiSpam: this.antiSpam,
+            levelingEnabled: this.levelingEnabled,
             plugins: {
                 disabled: this.plugins.disabled,
             },
@@ -273,6 +275,7 @@ const config = {
                 if (saved.premiumUsers) this.premiumUsers = [...new Set([...this.premiumUsers, ...saved.premiumUsers])];
                 if (saved.bannedUsers) this.bannedUsers = saved.bannedUsers;
                 if (saved.antiSpam) Object.assign(this.antiSpam, saved.antiSpam);
+                if (saved.levelingEnabled !== undefined) this.levelingEnabled = saved.levelingEnabled;
                 if (saved.plugins?.disabled) this.plugins.disabled = saved.plugins.disabled;
             }
         } catch (err) {
